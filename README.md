@@ -119,6 +119,8 @@ marlonthebug legacy import --reports reports
 | `standard` | 8 | 2.500 | 200 |
 | `deep` | 12 | 10.000 | 800 |
 
+Los módulos intrusivos (smuggling, race conditions, upload, RCE, deserialización, mass assignment, BOLA, prompt injection, auth bypass, etc.) solo se ejecutan automáticamente con el perfil `deep` o si se seleccionan explícitamente.
+
 ---
 
 ## Datos y portabilidad

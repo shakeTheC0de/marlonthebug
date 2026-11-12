@@ -29,6 +29,25 @@ PROFILES: dict[str, dict[str, Any]] = {
     "deep": {"max_pages": 800, "requests_per_second": 12.0, "max_requests": 10000, "max_depth": 5},
 }
 
+# Modules that can create state, send risky payloads or consume third-party
+# resources. They only run in "deep" unless the operator selects them
+# explicitly in the scan form.
+INTRUSIVE_MODULES = {
+    "recon/auth_bypass",
+    "web/business_logic",
+    "web/command_injection",
+    "web/deserialization",
+    "web/file_upload",
+    "web/race_conditions",
+    "web/rce",
+    "web/request_smuggling",
+    "web/waf_bypass",
+    "api/bola",
+    "api/mass_assignment",
+    "api/oauth",
+    "llm/prompt_injection",
+}
+
 
 class ScanManager:
     def __init__(self, repository: Repository, settings: AppSettings, intel: Any = None) -> None:
@@ -168,7 +187,7 @@ class ScanManager:
             if not targets:
                 raise RuntimeError("El workspace no tiene objetivos para analizar")
 
-            plugins = self._select_plugins(scan.categories, scan.modules)
+            plugins = self._select_plugins(scan.categories, scan.modules, scan.profile)
             if not plugins:
                 raise RuntimeError("No hay módulos disponibles para las categorías seleccionadas")
             await self._log(scan_id, "info", f"Módulos cargados: {len(plugins)}")
@@ -343,16 +362,25 @@ class ScanManager:
             await context.close()
             self.contexts.pop(scan_id, None)
 
-    def _select_plugins(self, categories: list[str], modules: list[str]) -> list[type[BasePlugin]]:
+    def _select_plugins(
+        self,
+        categories: list[str],
+        modules: list[str],
+        profile: str = "standard",
+    ) -> list[type[BasePlugin]]:
         registry = PluginRegistry()
         registry.discover()
         selected: list[type[BasePlugin]] = []
         wanted_modules = set(modules or [])
         wanted_categories = set(categories or [])
+        explicit = bool(wanted_modules)
         for key, plugin in registry._instances.items():
-            if wanted_modules and key not in wanted_modules:
+            if explicit and key not in wanted_modules:
                 continue
-            if not wanted_modules and wanted_categories and plugin.category not in wanted_categories:
+            if not explicit and wanted_categories and plugin.category not in wanted_categories:
+                continue
+            if not explicit and profile != "deep" and key in INTRUSIVE_MODULES:
+                logger.info("Skipping intrusive module %s in %s profile", key, profile)
                 continue
             selected.append(plugin.__class__)
         selected.sort(key=lambda item: (item.category != "recon", item.category, item.name))
