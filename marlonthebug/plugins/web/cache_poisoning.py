@@ -6,6 +6,7 @@ import logging
 import secrets
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Confidence, Finding, Severity
@@ -47,8 +48,9 @@ class CachePoisoningAuditor(BasePlugin):
                     if (url, header) in tested:
                         continue
                     tested.add((url, header))
+                    test_url = _with_cache_buster(url)
                     try:
-                        response = await http.get(url, headers={header: value})
+                        response = await http.get(test_url, headers={header: value})
                     except Exception:
                         continue
                     reflected = canary in response.body or canary in str(response.headers)
@@ -87,3 +89,10 @@ class CachePoisoningAuditor(BasePlugin):
                     )
         finally:
             await http.close()
+
+
+def _with_cache_buster(url: str) -> str:
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    query["mtb_cb"] = [secrets.token_hex(4)]
+    return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))

@@ -64,6 +64,7 @@ class PluginRegistry:
                     count += self._load_module(name)
         except ModuleNotFoundError:
             logger.warning("Plugin package not found: %s", package_path)
+        count = len(self._instances)
         logger.info("Discovered %d plugins", count)
         return count
 
