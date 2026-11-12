@@ -1,0 +1,60 @@
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+.playwright/
+
+# ── Runtime data (never commit) ──────────────────────────
+data/
+workspaces/
+reports/
+logs/
+private/
+local/
+*.db
+*.db-journal
+*.db-wal
+*.sqlite3
+*.log
+*.token
+
+# ── Local sensitive test material ────────────────────────
+/exploit_run.py
+/exploit_gestionazulred.py
+/test_auth_bypass.py
+/test_auth_bypass2.py
+/test_deep_analysis.py
+/test_login_vulns.py
+
+# ── Environment & secrets ────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── OS / editors ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Packaging ────────────────────────────────────────────
+*.spec.bak
+portable/
+release/
