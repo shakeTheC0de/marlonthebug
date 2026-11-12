@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, AsyncIterator, Callable
+from typing import TYPE_CHECKING
 
 from marlonthebug.fuzzer.mutators import Mutator
-from marlonthebug.fuzzer.generators import PayloadContext
 
 if TYPE_CHECKING:
     from marlonthebug.http.client import AsyncHTTPClient, HttpResponse
@@ -129,21 +129,32 @@ class Fuzzer:
 
     def _analyze(
         self,
-        response: "HttpResponse",
+        response: HttpResponse,
         baseline_len: int,
         response_time: float,
         payload: str,
     ) -> tuple[bool, str]:
-        if baseline_len > 0 and response.status_code not in self.config.filter_codes:
-            if abs(response.content_length - baseline_len) > self.config.match_length_threshold:
-                return True, f"Content length anomaly: {response.content_length} vs baseline {baseline_len}"
+        if (
+            baseline_len > 0
+            and response.status_code not in self.config.filter_codes
+            and abs(response.content_length - baseline_len) > self.config.match_length_threshold
+        ):
+            return True, f"Content length anomaly: {response.content_length} vs baseline {baseline_len}"
 
         if response.status_code in self.config.match_codes:
             body_lower = response.body.lower()
             error_indicators = [
-                "error", "exception", "traceback", "warning",
-                "sql", "syntax", "undefined", "stack trace",
-                "fatal", "uncaught", "failed",
+                "error",
+                "exception",
+                "traceback",
+                "warning",
+                "sql",
+                "syntax",
+                "undefined",
+                "stack trace",
+                "fatal",
+                "uncaught",
+                "failed",
             ]
             for indicator in error_indicators:
                 if indicator in body_lower:

@@ -7,7 +7,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
-from urllib.parse import urljoin, urlparse, parse_qs
+from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 from bs4 import BeautifulSoup
@@ -30,10 +30,10 @@ SECRET_PATTERNS = [
     (r'(?i)(?:token|access[_-]?token|auth[_-]?token)\s*[:=]\s*["\']([^"\'\s]{8,})["\']', "Access Token"),
     (r'(?i)(?:password|passwd|pwd)\s*[:=]\s*["\']([^"\']+?)["\']', "Password"),
     (r'(?i)(?:jwt|json[_-]?web[_-]?token|bearer)\s*[:=]\s*["\']([^"\'\s]{20,})["\']', "JWT Token"),
-    (r'(?i)(?:aws[_-]?access[_-]?key[_-]?id|AKIA[A-Z0-9]{16})', "AWS Access Key"),
-    (r'(?i)(?:github[_-]?token|gh[_-]?token|ghp_[A-Za-z0-9]{36,})', "GitHub Token"),
-    (r'(?i)(?:private[_-]?key|rsa[_-]?private|dsa[_-]?private)', "Private Key"),
-    (r'(?i)-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----', "Private Key Block"),
+    (r"(?i)(?:aws[_-]?access[_-]?key[_-]?id|AKIA[A-Z0-9]{16})", "AWS Access Key"),
+    (r"(?i)(?:github[_-]?token|gh[_-]?token|ghp_[A-Za-z0-9]{36,})", "GitHub Token"),
+    (r"(?i)(?:private[_-]?key|rsa[_-]?private|dsa[_-]?private)", "Private Key"),
+    (r"(?i)-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----", "Private Key Block"),
 ]
 
 
@@ -91,7 +91,7 @@ class Crawler:
             while True:
                 try:
                     url, depth = await asyncio.wait_for(queue.get(), timeout=2)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return
 
                 try:
@@ -149,16 +149,20 @@ class Crawler:
             for form in soup.find_all("form"):
                 inputs = []
                 for inp in form.find_all(["input", "textarea", "select"]):
-                    inputs.append({
-                        "name": inp.get("name", ""),
-                        "type": inp.get("type", "text"),
-                        "value": inp.get("value", ""),
-                    })
-                forms.append({
-                    "action": urljoin(url, form.get("action", "")),
-                    "method": form.get("method", "GET").upper(),
-                    "inputs": inputs,
-                })
+                    inputs.append(
+                        {
+                            "name": inp.get("name", ""),
+                            "type": inp.get("type", "text"),
+                            "value": inp.get("value", ""),
+                        }
+                    )
+                forms.append(
+                    {
+                        "action": urljoin(url, form.get("action", "")),
+                        "method": form.get("method", "GET").upper(),
+                        "inputs": inputs,
+                    }
+                )
 
             js_endpoints: list[str] = []
             secrets: list[dict] = []

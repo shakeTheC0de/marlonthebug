@@ -20,6 +20,7 @@ class HeaderAnalysis:
     issues: list[str] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
 
+
 SECURITY_HEADERS = {
     "content-security-policy": "Content-Security-Policy",
     "x-frame-options": "X-Frame-Options",
@@ -75,9 +76,7 @@ def analyze_headers(headers: dict[str, str], cookies: dict[str, str] | None = No
     analysis.cookie_analysis = cookie_analysis
     for issue in cookie_analysis:
         analysis.issues.append(f"Cookie {issue['name']}: {issue['issue']}")
-        analysis.recommendations.append(
-            f"Set {', '.join(issue['missing_flags'])} flags on cookie '{issue['name']}'."
-        )
+        analysis.recommendations.append(f"Set {', '.join(issue['missing_flags'])} flags on cookie '{issue['name']}'.")
 
     cors_analysis = analyze_cors(headers_lower)
     analysis.cors_analysis = cors_analysis
@@ -91,8 +90,8 @@ def analyze_csp(csp_header: str) -> dict[str, Any]:
     issues: list[str] = []
     directives: dict[str, str] = {}
 
-    for part in csp_header.split(";"):
-        part = part.strip()
+    for raw_part in csp_header.split(";"):
+        part = raw_part.strip()
         if " " in part:
             key, values = part.split(" ", 1)
             directives[key.strip()] = values.strip()
@@ -101,9 +100,8 @@ def analyze_csp(csp_header: str) -> dict[str, Any]:
 
     unsafe_keywords = ["'unsafe-inline'", "'unsafe-eval'", "'unsafe-hashes'"]
     for directive, value in directives.items():
-        if directive in ("script-src", "style-src", "default-src"):
-            if any(uk in value for uk in unsafe_keywords):
-                issues.append(f"{directive} contains unsafe directive (unsafe-inline/unsafe-eval)")
+        if directive in ("script-src", "style-src", "default-src") and any(uk in value for uk in unsafe_keywords):
+            issues.append(f"{directive} contains unsafe directive (unsafe-inline/unsafe-eval)")
 
     if "object-src" not in directives and "default-src" not in directives:
         issues.append("Missing object-src directive")
@@ -124,9 +122,7 @@ def analyze_cookies(
     results: list[dict[str, Any]] = []
     headers = headers or {}
 
-    set_cookie_headers = [
-        v for k, v in headers.items() if k.lower() == "set-cookie"
-    ]
+    set_cookie_headers = [v for k, v in headers.items() if k.lower() == "set-cookie"]
 
     if set_cookie_headers:
         for sc in set_cookie_headers:
@@ -144,19 +140,23 @@ def analyze_cookies(
                     missing.append("SameSite")
 
                 if missing:
-                    results.append({
-                        "name": name,
-                        "issue": f"Missing flags: {', '.join(missing)}",
-                        "missing_flags": missing,
-                    })
+                    results.append(
+                        {
+                            "name": name,
+                            "issue": f"Missing flags: {', '.join(missing)}",
+                            "missing_flags": missing,
+                        }
+                    )
         return results
 
     for name in cookies:
-        results.append({
-            "name": name,
-            "issue": "Cookie set without security flags (cannot verify)",
-            "missing_flags": ["HttpOnly", "Secure", "SameSite"],
-        })
+        results.append(
+            {
+                "name": name,
+                "issue": "Cookie set without security flags (cannot verify)",
+                "missing_flags": ["HttpOnly", "Secure", "SameSite"],
+            }
+        )
     return results
 
 
@@ -171,13 +171,11 @@ def analyze_cors(headers: dict[str, str]) -> dict[str, Any]:
             issues.append("Access-Control-Allow-Origin is '*' with credentials enabled — this is dangerous!")
         else:
             issues.append("Access-Control-Allow-Origin is '*' — allows any origin.")
-    elif acao:
-        if "null" in acao:
-            issues.append("Access-Control-Allow-Origin includes 'null' — vulnerable to sandboxed origins.")
+    elif acao and "null" in acao:
+        issues.append("Access-Control-Allow-Origin includes 'null' — vulnerable to sandboxed origins.")
 
     allowed_methods = headers.get("access-control-allow-methods", "")
-    allowed_headers = headers.get("access-control-allow-headers", "")
-    if allowed_methods and "PUT" in allowed_methods or "DELETE" in allowed_methods or "PATCH" in allowed_methods:
+    if (allowed_methods and "PUT" in allowed_methods) or "DELETE" in allowed_methods or "PATCH" in allowed_methods:
         issues.append("CORS allows unsafe HTTP methods.")
 
     return {

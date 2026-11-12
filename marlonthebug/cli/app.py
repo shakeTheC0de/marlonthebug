@@ -1,332 +1,550 @@
-"""CLI command groups and entry points for MarlonTheBug."""
+"""Command-line interface for MarlonTheBug 2.0."""
 
+from __future__ import annotations
+
+import asyncio
+import shutil
+import threading
+import webbrowser
 from pathlib import Path
 
 import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from marlonthebug import __version__
+from marlonthebug.db.database import Database, sqlite_url
+from marlonthebug.db.repository import Repository
+from marlonthebug.paths import AppPaths
+from marlonthebug.services.intel import IntelService
+from marlonthebug.services.reports import ReportRequest, ReportService
+from marlonthebug.services.scanner import PROFILES, ScanManager
+from marlonthebug.settings import load_settings, write_default_config
+from marlonthebug.utils.logging import setup_logging
 
 cli = typer.Typer(
     name="marlonthebug",
-    help="MarlonTheBug — Offensive Security Auditing & Exploitation Platform",
+    help="MarlonTheBug — plataforma de auditoría y reporting de seguridad.",
     no_args_is_help=True,
+    add_completion=False,
 )
-
-workspace_app = typer.Typer(help="Workspace management", no_args_is_help=True)
+workspace_app = typer.Typer(help="Gestión de proyectos", no_args_is_help=True)
+scan_app = typer.Typer(help="Ejecución de análisis", no_args_is_help=True)
+report_app = typer.Typer(help="Generación de informes", no_args_is_help=True)
+intel_app = typer.Typer(help="Inteligencia de vulnerabilidades", no_args_is_help=True)
 cli.add_typer(workspace_app, name="workspace")
-
-recon_app = typer.Typer(help="Reconnaissance operations", no_args_is_help=True)
-cli.add_typer(recon_app, name="recon")
-
-audit_app = typer.Typer(help="Security auditing", no_args_is_help=True)
-cli.add_typer(audit_app, name="audit")
-
-exploit_app = typer.Typer(help="Exploitation", no_args_is_help=True)
-cli.add_typer(exploit_app, name="exploit")
-
-sessions_app = typer.Typer(help="Session management", no_args_is_help=True)
-cli.add_typer(sessions_app, name="sessions")
-
-report_app = typer.Typer(help="Reporting", no_args_is_help=True)
+cli.add_typer(scan_app, name="scan")
 cli.add_typer(report_app, name="report")
+cli.add_typer(intel_app, name="intel")
 
-listener_app = typer.Typer(help="Listener management", no_args_is_help=True)
-cli.add_typer(listener_app, name="listeners")
+console = Console()
 
 
-@cli.callback(invoke_without_command=True)
+def _paths(data_dir: str | None = None, portable: bool = False) -> AppPaths:
+    paths = AppPaths.resolve(data_dir=data_dir, portable=portable)
+    paths.ensure()
+    write_default_config(paths)
+    return paths
+
+
+def _settings(paths: AppPaths, offline: bool = False):
+    return load_settings(paths, overrides={"intel": {"offline": True}} if offline else None)
+
+
+async def _repo(paths: AppPaths) -> tuple[Database, Repository]:
+    database = Database(sqlite_url(paths.db_path), portable=paths.portable)
+    await database.init()
+    return database, Repository(database)
+
+
+def _resolve_workspace(repository: Repository, name: str | None):
+    async def resolve():
+        if name:
+            workspace = await repository.get_workspace_by_name(name)
+            if workspace:
+                return workspace
+            return await repository.get_workspace(name)
+        workspaces = await repository.list_workspaces()
+        return workspaces[0] if workspaces else None
+
+    return resolve()
+
+
+@cli.callback()
 def main(
-    ctx: typer.Context,
-    version: bool = typer.Option(False, "--version", "-v", help="Show version"),
+    version: bool = typer.Option(False, "--version", "-v", help="Mostrar versión"),
 ) -> None:
     if version:
         typer.echo(f"MarlonTheBug v{__version__}")
         raise typer.Exit()
-    if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())
-
-
-# ── Workspace commands ────────────────────────────────────
-
-@workspace_app.command()
-def create(
-    name: str = typer.Option(..., "--name", "-n", help="Workspace name"),
-    description: str = typer.Option("", "--description", "-d", help="Description"),
-) -> None:
-    """Create a new workspace."""
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    ws = mgr.create(name)
-    typer.echo(f"[+] Created workspace: {ws.name}")
-
-
-@workspace_app.command()
-def switch(
-    name: str = typer.Option(..., "--name", "-n", help="Workspace name"),
-) -> None:
-    """Switch to an existing workspace."""
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    ws = mgr.switch(name)
-    typer.echo(f"[+] Switched to workspace: {ws.name}")
-    typer.echo(f"    Targets: {len(ws.targets)}")
-
-
-@workspace_app.command()
-def add(
-    domains: str = typer.Option("", "--domains", help="Comma-separated domains"),
-    ips: str = typer.Option("", "--ips", help="Comma-separated IPs or CIDR ranges"),
-) -> None:
-    """Add targets to the current workspace."""
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    ws = mgr.current
-    if not ws:
-        typer.echo("[!] No active workspace. Create or switch to one first.")
-        raise typer.Exit(1)
-
-    domain_list = [d.strip() for d in domains.split(",") if d.strip()]
-    ip_list = [i.strip() for i in ips.split(",") if i.strip()]
-
-    mgr.add_targets(domains=domain_list, ips=ip_list)
-    typer.echo(f"[+] Added targets to workspace: {ws.name}")
-    typer.echo(f"    Domains: {domain_list}")
-    typer.echo(f"    IPs/CIDRs: {ip_list}")
-
-
-@workspace_app.command()
-def info() -> None:
-    """Show current workspace info."""
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    ws = mgr.current
-    if not ws:
-        typer.echo("[!] No active workspace.")
-        raise typer.Exit(1)
-
-    typer.echo(f"Workspace: {ws.name}")
-    typer.echo(f"Created:   {ws.created_at}")
-    typer.echo(f"Updated:   {ws.updated_at}")
-    typer.echo(f"Targets:   {len(ws.targets)}")
-    typer.echo(f"Scope:")
-    typer.echo(f"  Domains:   {ws.scope.allowed_domains}")
-    typer.echo(f"  IP Ranges: {ws.scope.allowed_ip_ranges}")
-    typer.echo(f"  Excluded:  {ws.scope.excluded}")
-    typer.echo(f"  Exploitation: {'ON' if ws.scope.allow_exploitation else 'OFF'}")
-
-
-@workspace_app.command()
-def list() -> None:
-    """List all workspaces."""
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    workspaces = mgr.list_workspaces()
-    if not workspaces:
-        typer.echo("No workspaces found.")
-        return
-    for name in workspaces:
-        marker = "*" if mgr.current and mgr.current.name == name else " "
-        typer.echo(f"  [{marker}] {name}")
-
-
-@workspace_app.command()
-def delete(
-    name: str = typer.Option(..., "--name", "-n", help="Workspace name"),
-) -> None:
-    """Delete a workspace."""
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    confirm = typer.confirm(f"Delete workspace '{name}'? This cannot be undone.")
-    if confirm:
-        mgr.delete(name)
-        typer.echo(f"[+] Deleted workspace: {name}")
-
-
-# ── Recon commands ────────────────────────────────────────
-
-@recon_app.command()
-def run(
-    plugin: str = typer.Option("", "--plugin", "-p", help="Specific plugin to run"),
-) -> None:
-    """Run reconnaissance against workspace targets."""
-    from collections import Counter
-
-    from marlonthebug.core.engine import Engine
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    ws = mgr.current
-    if not ws:
-        typer.echo("[!] No active workspace.")
-        raise typer.Exit(1)
-
-    engine = Engine()
-    typer.echo(f"[*] Running recon on workspace: {ws.name}")
-
-    async def _run() -> None:
-        await engine.start()
-        targets = [ws.targets[t] for t in ws.targets]
-        findings = await engine.run_recon(targets)
-        await engine.stop()
-
-        typer.echo(f"\n[+] Recon complete: {len(findings)} findings\n")
-
-        by_severity: Counter[str] = Counter()
-        by_plugin: Counter[str] = Counter()
-        for f in findings:
-            by_severity[f.severity.value] += 1
-            by_plugin[f.plugin_name] += 1
-
-        if by_severity:
-            typer.echo("  Severity breakdown:")
-            for sev in ["critical", "high", "medium", "low", "info"]:
-                if sev in by_severity:
-                    badge = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "⚪"}.get(sev, "")
-                    typer.echo(f"    {badge} {sev.upper():8s} {by_severity[sev]}")
-
-        typer.echo(f"\n  Plugin breakdown:")
-        for name, count in by_plugin.most_common():
-            typer.echo(f"    {name:25s} {count}")
-
-        # Show top targets
-        count = 0
-        for host, t in ws.targets.items():
-            if count >= 10:
-                break
-            techs = ", ".join(t.technologies[:5]) or "none"
-            typer.echo(f"    {host:40s} type={t.type:<10s} tech={techs}")
-            count += 1
-
-        from pathlib import Path
-        from marlonthebug.output.reports import ReportGenerator
-        rgen = ReportGenerator(output_dir=Path("reports"))
-        path = rgen.generate_json(findings, workspace_name=ws.name)
-        typer.echo(f"\n[+] Report saved: {path}")
-
-        ws.save()
-
-    import asyncio
-    asyncio.run(_run())
-
-
-# ── Audit commands ────────────────────────────────────────
-
-@audit_app.command()
-def run(
-    category: str = typer.Option("web", "--category", "-c", help="Audit category (web, api, auth)"),
-) -> None:
-    """Run security audit against workspace targets."""
-    from collections import Counter
-    from pathlib import Path
-
-    from marlonthebug.core.engine import Engine
-    from marlonthebug.core.workspace import WorkspaceManager
-
-    mgr = WorkspaceManager(base_dir=Path("workspaces"))
-    ws = mgr.current
-    if not ws:
-        typer.echo("[!] No active workspace.")
-        raise typer.Exit(1)
-
-    engine = Engine()
-    typer.echo(f"[*] Running {category} audit on workspace: {ws.name}")
-
-    async def _run() -> None:
-        await engine.start()
-        targets = [ws.targets[t] for t in ws.targets]
-        findings = await engine.run_audit(targets, categories=[category])
-        await engine.stop()
-
-        typer.echo(f"\n[+] Audit complete: {len(findings)} findings\n")
-
-        by_severity: Counter[str] = Counter()
-        by_plugin: Counter[str] = Counter()
-        for f in findings:
-            by_severity[f.severity.value] += 1
-            by_plugin[f.plugin_name] += 1
-
-        if by_severity:
-            typer.echo("  Severity breakdown:")
-            badges = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "⚪"}
-            for sev in ["critical", "high", "medium", "low", "info"]:
-                if sev in by_severity:
-                    typer.echo(f"    {badges.get(sev, '')} {sev.upper():8s} {by_severity[sev]}")
-
-        typer.echo(f"\n  Plugin breakdown:")
-        for name, count in by_plugin.most_common():
-            typer.echo(f"    {name:28s} {count}")
-
-        if findings:
-            typer.echo(f"\n  Top findings:")
-            sorted_findings = sorted(findings, key=lambda f: f.cvss_score, reverse=True)
-            for f in sorted_findings[:10]:
-                sev_badge = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢", "info": "⚪"}
-                badge = sev_badge.get(f.severity.value, "")
-                typer.echo(f"    {badge} [{f.severity.value.upper():8s}] {f.title}")
-                if f.endpoint:
-                    typer.echo(f"       Endpoint: {f.endpoint}")
-                if f.evidence:
-                    ev_short = str(f.evidence)[:120]
-                    typer.echo(f"       Evidence: {ev_short}")
-
-        from marlonthebug.output.reports import ReportGenerator
-        rgen = ReportGenerator(output_dir=Path("reports"))
-        path = rgen.generate_json(findings, workspace_name=ws.name)
-        typer.echo(f"\n[+] Report saved: {path}")
-
-    import asyncio
-    asyncio.run(_run())
-
-
-# ── Listener commands ─────────────────────────────────────
-
-@listener_app.command()
-def start(
-    listener_type: str = typer.Option("tcp", "--type", "-t", help="Listener type: tcp, http, dns"),
-    port: int = typer.Option(4444, "--port", "-p", help="Port to listen on"),
-    host: str = typer.Option("0.0.0.0", "--host", "-H", help="Host to bind to"),
-) -> None:
-    """Start a listener for reverse connections."""
-    typer.echo(f"[+] Starting {listener_type} listener on {host}:{port}")
-    typer.echo("[*] Implement listener server logic here")
-
-
-# ── Session commands ──────────────────────────────────────
-
-@sessions_app.command()
-def list() -> None:
-    """List active exploitation sessions."""
-    typer.echo("No active sessions.")
-
-
-@sessions_app.command()
-def interact(
-    session_id: str = typer.Option(..., "--id", "-i", help="Session ID to interact with"),
-) -> None:
-    """Interact with an active session."""
-    typer.echo(f"[*] Interacting with session: {session_id}")
-
-
-# ── Report commands ───────────────────────────────────────
-
-@report_app.command()
-def generate(
-    format: str = typer.Option("json", "--format", "-f", help="Output format: json, markdown, html, pdf"),
-    output: str = typer.Option("", "--output", "-o", help="Output file path"),
-) -> None:
-    """Generate a report from workspace findings."""
-    typer.echo(f"[*] Generating {format} report...")
 
 
 @cli.command()
-def console() -> None:
-    """Launch the interactive TUI console."""
-    from marlonthebug.cli.console import ConsoleApp
+def panel(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host de escucha"),
+    port: int = typer.Option(8765, "--port", help="Puerto del panel"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="No abrir el navegador"),
+    no_auth: bool = typer.Option(False, "--no-auth", help="Desactivar token local (no recomendado)"),
+    data_dir: str | None = typer.Option(None, "--data-dir", help="Directorio de datos"),
+    portable: bool = typer.Option(False, "--portable", help="Guardar todo en ./data"),
+    offline: bool = typer.Option(False, "--offline", help="No descargar feeds de inteligencia"),
+) -> None:
+    """Arranca el panel web local."""
+    import uvicorn
 
+    from marlonthebug.web.app import create_app
+
+    paths = _paths(data_dir, portable)
+    overrides = {"panel": {"host": host, "port": port}}
+    settings = load_settings(paths, overrides=overrides)
+    settings.intel.offline = offline
+    setup_logging(
+        level=settings.logging.level,
+        log_file=paths.logs_dir / "marlonthebug.log",
+        rotation=settings.logging.rotation,
+        retention=settings.logging.retention,
+    )
+    app = create_app(paths, settings, auth_enabled=not no_auth)
+    token = app.state.auth.token if app.state.auth.enabled else ""
+    browser_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    url = f"http://{browser_host}:{port}/"
+    if token:
+        url += f"?token={token}"
+
+    console.print(
+        Panel.fit(
+            f"[bold cyan]MarlonTheBug[/bold cyan] v{__version__}\n"
+            f"Panel: [link]{url}[/link]\n"
+            f"Datos: [dim]{paths.root}[/dim]\n"
+            f"Config: [dim]{paths.config_file}[/dim]",
+            title="Servidor local",
+            border_style="cyan",
+        )
+    )
+    if host not in {"127.0.0.1", "localhost", "::1"} and no_auth:
+        console.print("[bold red]Aviso:[/bold red] estás exponiendo el panel sin autenticación.")
+    if not no_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    uvicorn.run(app, host=host, port=port, log_config=None)
+
+
+@cli.command("serve", hidden=True)
+def serve_alias(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port"),
+    no_browser: bool = typer.Option(False, "--no-browser"),
+    no_auth: bool = typer.Option(False, "--no-auth"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+    portable: bool = typer.Option(False, "--portable"),
+    offline: bool = typer.Option(False, "--offline"),
+) -> None:
+    panel(host, port, no_browser, no_auth, data_dir, portable, offline)
+
+
+@workspace_app.command("create")
+def workspace_create(
+    name: str = typer.Option(..., "--name", "-n"),
+    client: str = typer.Option("", "--client"),
+    description: str = typer.Option("", "--description", "-d"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Crea un proyecto."""
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        database, repository = await _repo(paths)
+        try:
+            if await repository.get_workspace_by_name(name):
+                console.print(f"[red]Ya existe un proyecto llamado {name}[/red]")
+                raise typer.Exit(1)
+            workspace = await repository.create_workspace(name, client_name=client, description=description)
+            await repository.log_action("workspace.create", target=name, detail={"workspace_id": workspace.id})
+            console.print(f"[green]Proyecto creado:[/green] {workspace.name} ({workspace.id})")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@workspace_app.command("list")
+def workspace_list(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
+    """Lista proyectos."""
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        database, repository = await _repo(paths)
+        try:
+            workspaces = await repository.list_workspaces()
+            table = Table(title="Proyectos")
+            table.add_column("Nombre")
+            table.add_column("Cliente")
+            table.add_column("Activos")
+            table.add_column("Creado")
+            for workspace in workspaces:
+                table.add_row(
+                    workspace.name,
+                    workspace.client_name or "—",
+                    str(len(workspace.targets or [])),
+                    workspace.created_at.strftime("%Y-%m-%d"),
+                )
+            console.print(table if workspaces else "No hay proyectos.")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@workspace_app.command("add")
+def workspace_add(
+    name: str = typer.Option(..., "--name", "-n"),
+    domains: str = typer.Option("", "--domains"),
+    ips: str = typer.Option("", "--ips"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Añade dominios o IPs al alcance de un proyecto."""
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        database, repository = await _repo(paths)
+        try:
+            workspace = await repository.get_workspace_by_name(name)
+            if not workspace:
+                console.print(f"[red]Proyecto no encontrado: {name}[/red]")
+                raise typer.Exit(1)
+            hosts = [host.strip() for host in domains.split(",") if host.strip()]
+            hosts += [ip.strip() for ip in ips.split(",") if ip.strip()]
+            for host in hosts:
+                await repository.add_target(workspace.id, host)
+            await repository.log_action("target.add", target=name, detail={"hosts": hosts})
+            console.print(f"[green]Añadidos {len(hosts)} objetivos a {name}[/green]")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@workspace_app.command("info")
+def workspace_info(
+    name: str = typer.Option(..., "--name", "-n"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Muestra el detalle de un proyecto."""
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        database, repository = await _repo(paths)
+        try:
+            workspace = await repository.get_workspace_by_name(name)
+            if not workspace:
+                console.print(f"[red]Proyecto no encontrado: {name}[/red]")
+                raise typer.Exit(1)
+            stats = await repository.dashboard_stats(workspace.id)
+            console.print(f"[bold]{workspace.name}[/bold] · {workspace.client_name or 'sin cliente'}")
+            console.print(
+                f"Activos: {len(workspace.targets or [])} · Hallazgos: {stats['total']} · Análisis: {stats['scans']}"
+            )
+            console.print(f"Alcance: {workspace.scope}")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@workspace_app.command("delete")
+def workspace_delete(
+    name: str = typer.Option(..., "--name", "-n"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Elimina un proyecto y todos sus datos."""
+    if not yes and not typer.confirm(f"¿Eliminar el proyecto {name} y todos sus datos?"):
+        raise typer.Exit()
+    asyncio.run(_delete_workspace(name, data_dir))
+
+
+async def _delete_workspace(name: str, data_dir: str | None) -> None:
+    paths = _paths(data_dir)
+    database, repository = await _repo(paths)
+    try:
+        workspace = await repository.get_workspace_by_name(name)
+        if workspace:
+            await repository.delete_workspace(workspace.id)
+            console.print(f"[green]Proyecto eliminado:[/green] {name}")
+        else:
+            console.print(f"[red]Proyecto no encontrado: {name}[/red]")
+    finally:
+        await database.close()
+
+
+@scan_app.command("run")
+def scan_run(
+    workspace_name: str = typer.Option(..., "--workspace", "-w", help="Nombre del proyecto"),
+    targets: str = typer.Option("", "--targets", "-t", help="Objetivos separados por coma"),
+    categories: str = typer.Option("recon,web", "--categories", "-c"),
+    modules: str = typer.Option("", "--modules", "-m", help="Módulos category/name separados por coma"),
+    profile: str = typer.Option("standard", "--profile", "-p"),
+    authorized: bool = typer.Option(False, "--authorized", help="Confirmo que tengo autorización"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Ejecuta un análisis desde la terminal."""
+    if not authorized:
+        console.print("[red]Debes confirmar autorización con --authorized[/red]")
+        raise typer.Exit(1)
+    if profile not in PROFILES:
+        console.print(f"[red]Perfil no válido. Usa: {', '.join(PROFILES)}[/red]")
+        raise typer.Exit(1)
+    asyncio.run(_run_scan(workspace_name, targets, categories, modules, profile, data_dir))
+
+
+async def _run_scan(
+    workspace_name: str,
+    targets: str,
+    categories: str,
+    modules: str,
+    profile: str,
+    data_dir: str | None,
+) -> None:
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    setup_logging(settings.logging.level, paths.logs_dir / "marlonthebug.log")
+    database, repository = await _repo(paths)
+    try:
+        workspace = await repository.get_workspace_by_name(workspace_name)
+        if not workspace:
+            console.print(f"[red]Proyecto no encontrado: {workspace_name}[/red]")
+            raise typer.Exit(1)
+        host_list = [item.strip() for item in targets.split(",") if item.strip()]
+        if not host_list:
+            host_list = [target.host for target in workspace.targets]
+        if not host_list:
+            console.print("[red]El proyecto no tiene objetivos. Usa --targets o añade activos.[/red]")
+            raise typer.Exit(1)
+        for host in host_list:
+            await repository.add_target(workspace.id, host)
+        category_list = [item.strip() for item in categories.split(",") if item.strip()]
+        module_list = [item.strip() for item in modules.split(",") if item.strip()]
+        scan = await repository.create_scan(
+            workspace.id,
+            host_list,
+            category_list,
+            modules=module_list,
+            profile=profile,
+            created_by="cli",
+        )
+        manager = ScanManager(repository, settings, IntelService(repository, settings, paths))
+        await manager.start(scan.id)
+        task = manager.tasks[scan.id]
+        printed = 0
+        while not task.done():
+            logs = manager.get_logs(scan.id)
+            for entry in logs[printed:]:
+                console.print(f"[dim]{entry['time']}[/dim] [{entry['level'].lower()}]{entry['message']}[/]")
+            printed = len(logs)
+            await asyncio.sleep(0.6)
+        await task
+        for entry in manager.get_logs(scan.id)[printed:]:
+            console.print(f"[dim]{entry['time']}[/dim] [{entry['level'].lower()}]{entry['message']}[/]")
+        findings, total = await repository.list_findings(workspace_id=workspace.id, page_size=20, sort="severity")
+        console.print(f"\n[green]Análisis completado:[/green] {total} hallazgos en el proyecto")
+        table = Table(title="Últimos hallazgos")
+        table.add_column("Severidad")
+        table.add_column("Título")
+        table.add_column("Objetivo")
+        for finding in findings[:10]:
+            table.add_row(finding.severity, finding.title, finding.target_host)
+        if findings:
+            console.print(table)
+    finally:
+        await database.close()
+
+
+@report_app.command("generate")
+def report_generate(
+    workspace_name: str = typer.Option(..., "--workspace", "-w"),
+    scan_id: str = typer.Option("", "--scan", help="ID de análisis concreto"),
+    format: str = typer.Option("pdf", "--format", "-f", help="pdf, html, markdown o json"),
+    template: str = typer.Option("full", "--template", help="full, executive o technical"),
+    language: str = typer.Option("es", "--language", help="es o en"),
+    output: str | None = typer.Option(None, "--output", "-o"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Genera un informe desde la base de datos."""
+    asyncio.run(_generate_report(workspace_name, scan_id, format, template, language, output, data_dir))
+
+
+async def _generate_report(
+    workspace_name: str,
+    scan_id: str,
+    fmt: str,
+    template: str,
+    language: str,
+    output: str | None,
+    data_dir: str | None,
+) -> None:
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    setup_logging(settings.logging.level, paths.logs_dir / "marlonthebug.log")
+    database, repository = await _repo(paths)
+    try:
+        workspace = await repository.get_workspace_by_name(workspace_name)
+        if not workspace:
+            console.print(f"[red]Proyecto no encontrado: {workspace_name}[/red]")
+            raise typer.Exit(1)
+        service = ReportService(repository, settings, paths)
+        report = await service.generate(
+            ReportRequest(
+                workspace_id=workspace.id,
+                scan_run_id=scan_id or None,
+                format=fmt,
+                template=template,
+                language=language,
+                classification=settings.reports.classification,
+                company=settings.reports.company,
+                client_name=workspace.client_name,
+            )
+        )
+        console.print(f"[green]Informe generado:[/green] {report.path}")
+        if output:
+            target = Path(output).expanduser()
+            shutil.copy2(report.path, target)
+            console.print(f"[green]Copiado a:[/green] {target}")
+    finally:
+        await database.close()
+
+
+@intel_app.command("sync")
+def intel_sync(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
+    """Sincroniza KEV y EPSS."""
+    asyncio.run(_intel_sync(data_dir))
+
+
+async def _intel_sync(data_dir: str | None) -> None:
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        service = IntelService(repository, settings, paths)
+        result = await service.sync_all()
+        console.print(result)
+    finally:
+        await database.close()
+
+
+@intel_app.command("status")
+def intel_status(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
+    """Muestra el estado de los feeds."""
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        database, repository = await _repo(paths)
+        try:
+            feeds = await repository.list_feeds()
+            stats = await repository.intel_stats()
+            table = Table(title="Inteligencia")
+            table.add_column("Feed")
+            table.add_column("Estado")
+            table.add_column("Registros")
+            table.add_column("Última sync")
+            for feed in feeds:
+                table.add_row(
+                    feed.name,
+                    feed.status,
+                    str(feed.count),
+                    feed.last_sync.strftime("%Y-%m-%d %H:%M") if feed.last_sync else "nunca",
+                )
+            console.print(table)
+            console.print(f"CVEs: {stats['total']} · KEV: {stats['kev']} · EPSS: {stats['epss']}")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@intel_app.command("search")
+def intel_search(
+    query: str = typer.Argument(...),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Busca una CVE en la caché local."""
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        database, repository = await _repo(paths)
+        try:
+            results = await repository.search_cves(query, 30)
+            table = Table(title=f"Resultados para {query}")
+            table.add_column("CVE")
+            table.add_column("CVSS")
+            table.add_column("KEV")
+            table.add_column("Descripción")
+            for cve in results:
+                table.add_row(cve.cve_id, f"{cve.cvss_score:.1f}", "sí" if cve.kev else "no", cve.description[:90])
+            console.print(table if results else "Sin resultados.")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@intel_app.command("export")
+def intel_export(
+    output: str | None = typer.Option(None, "--output", "-o"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Exporta un bundle de inteligencia para entornos air-gapped."""
+    asyncio.run(_intel_export(output, data_dir))
+
+
+async def _intel_export(output: str | None, data_dir: str | None) -> None:
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        service = IntelService(repository, settings, paths)
+        path = await service.export_bundle(Path(output).expanduser() if output else None)
+        console.print(f"[green]Bundle exportado:[/green] {path}")
+    finally:
+        await database.close()
+
+
+@intel_app.command("import")
+def intel_import(
+    path: str = typer.Argument(...),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Importa un bundle de inteligencia."""
+    asyncio.run(_intel_import(path, data_dir))
+
+
+async def _intel_import(path: str, data_dir: str | None) -> None:
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        service = IntelService(repository, settings, paths)
+        count = await service.import_bundle(Path(path).expanduser())
+        console.print(f"[green]{count} CVEs importadas[/green]")
+    finally:
+        await database.close()
+
+
+@cli.command("console")
+def console_tui() -> None:
+    """Abre la consola TUI clásica (requiere el extra tui)."""
+    try:
+        from marlonthebug.cli.console import ConsoleApp
+    except ImportError:
+        console.print("[red]La TUI requiere instalar:[/red] uv sync --extra tui")
+        raise typer.Exit(1) from None
     ConsoleApp().run()
+
+
+@cli.command("config")
+def config_command(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
+    """Muestra la configuración efectiva."""
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    console.print(f"Datos: {paths.root}")
+    console.print(f"Config: {paths.config_file}")
+    console.print(settings.model_dump(mode="json"))

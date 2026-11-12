@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from marlonthebug.plugins.base import Finding, Severity
+    from marlonthebug.plugins.base import Finding
 
 logger = logging.getLogger("marlonthebug.output")
 
@@ -77,12 +77,12 @@ def save_findings_markdown(findings: list[Finding], filepath: Path, title: str =
         lines.append(f"**Severity:** {MarkdownFormatter.severity_badge(f.severity.value)}")
         lines.append(f"**CVSS Score:** {f.cvss_score}")
         lines.append(f"**Endpoint:** {f.endpoint}")
-        lines.append(f"")
+        lines.append("")
         lines.append(f.description)
-        lines.append(f"")
+        lines.append("")
         if f.remediation:
-            lines.append(f"### Remediation")
+            lines.append("### Remediation")
             lines.append(f.remediation)
-            lines.append(f"")
+            lines.append("")
     filepath.write_text("\n".join(lines))
     return filepath

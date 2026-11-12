@@ -1,9 +1,9 @@
 """Collaborator token management — per-scan unique tokens for callback correlation."""
 
-import string
-import secrets
 import logging
-from dataclasses import dataclass, field
+import secrets
+import string
+from dataclasses import dataclass
 
 logger = logging.getLogger("marlonthebug.collaborator")
 
@@ -30,7 +30,9 @@ class TokenManager:
         self.length = length
         self._tokens: dict[str, CollaboratorToken] = {}
 
-    def create_token(self, plugin_name: str, scan_id: str = "", target: str = "", purpose: str = "") -> CollaboratorToken:
+    def create_token(
+        self, plugin_name: str, scan_id: str = "", target: str = "", purpose: str = ""
+    ) -> CollaboratorToken:
         token_str = self._generate()
         ct = CollaboratorToken(
             token=token_str,

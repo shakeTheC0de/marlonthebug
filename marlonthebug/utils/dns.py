@@ -1,11 +1,10 @@
 """Async DNS resolver wrapper utilities."""
 
-import asyncio
 import logging
 from typing import Any
 
 from dns.asyncresolver import resolve as dns_resolve
-from dns.rdatatype import A, AAAA, CNAME, MX, NS, SOA, TXT
+from dns.rdatatype import AAAA, CNAME, MX, NS, SOA, TXT, A
 
 logger = logging.getLogger("marlonthebug.utils.dns")
 

@@ -9,7 +9,7 @@ from marlonthebug.output.cvss import CVSS31 as CVSS
 
 
 def test_version() -> None:
-    assert __version__ == "1.0.0"
+    assert __version__ == "2.0.0"
 
 
 class TestCVSS:
@@ -136,20 +136,25 @@ class TestMutators:
 class TestEncoder:
     def test_base64(self) -> None:
         from marlonthebug.exploit.payloads.encoders import Encoder
+
         encoded = Encoder.base64("test")
         import base64
+
         assert base64.b64decode(encoded).decode() == "test"
 
     def test_url_encode(self) -> None:
         from marlonthebug.exploit.payloads.encoders import Encoder
+
         assert Encoder.url("hello world") == "hello%20world"
 
     def test_hex_encode(self) -> None:
         from marlonthebug.exploit.payloads.encoders import Encoder
+
         assert "0x" in Encoder.hex("A")
 
     def test_encode_chain(self) -> None:
         from marlonthebug.exploit.payloads.encoders import encode_chain
+
         result = encode_chain("test", ["base64", "url"])
         assert result  # should produce valid output
 
@@ -157,37 +162,42 @@ class TestEncoder:
 class TestHeaders:
     def test_analyze_missing_headers(self) -> None:
         from marlonthebug.utils.headers import analyze_headers
+
         analysis = analyze_headers({})
         assert len(analysis.missing_headers) > 0
         assert analysis.score < 100
 
     def test_analyze_with_csp(self) -> None:
         from marlonthebug.utils.headers import analyze_headers
-        analysis = analyze_headers({
-            "Content-Security-Policy": "default-src 'self'; base-uri 'self'",
-            "X-Frame-Options": "DENY",
-            "X-Content-Type-Options": "nosniff",
-            "Strict-Transport-Security": "max-age=31536000",
-        })
+
+        analysis = analyze_headers(
+            {
+                "Content-Security-Policy": "default-src 'self'; base-uri 'self'",
+                "X-Frame-Options": "DENY",
+                "X-Content-Type-Options": "nosniff",
+                "Strict-Transport-Security": "max-age=31536000",
+            }
+        )
         assert analysis.score > 50
         assert analysis.csp_analysis.get("safe", False) is True
 
     def test_cookie_missing_flags(self) -> None:
         from marlonthebug.utils.headers import analyze_headers
-        analysis = analyze_headers({
-            "Set-Cookie": "session=abc123"
-        })
+
+        analysis = analyze_headers({"Set-Cookie": "session=abc123"})
         assert len(analysis.cookie_analysis) >= 1
 
     def test_cors_wildcard_issue(self) -> None:
         from marlonthebug.utils.headers import analyze_cors
+
         result = analyze_cors({"access-control-allow-origin": "*"})
         assert len(result["issues"]) > 0
 
 
 class TestPayloads:
     def test_reverse_shell_generation(self) -> None:
-        from marlonthebug.exploit.payloads.generator import PayloadGenerator, PayloadConfig, PayloadType, OS
+        from marlonthebug.exploit.payloads.generator import OS, PayloadConfig, PayloadGenerator, PayloadType
+
         gen = PayloadGenerator()
         config = PayloadConfig(
             payload_type=PayloadType.REVERSE_SHELL,
@@ -203,6 +213,7 @@ class TestPayloads:
 
     def test_web_shell_generation(self) -> None:
         from marlonthebug.exploit.payloads.generator import PayloadGenerator
+
         gen = PayloadGenerator()
         shells = gen.web_shell("php")
         assert len(shells) > 0
@@ -210,6 +221,7 @@ class TestPayloads:
 
     def test_cheatsheet(self) -> None:
         from marlonthebug.exploit.payloads.generator import PayloadGenerator
+
         gen = PayloadGenerator()
         cheatsheet = gen.generate_cheatsheet("10.0.0.1", 4444)
         assert "bash" in cheatsheet
@@ -219,6 +231,7 @@ class TestPayloads:
 class TestCollaborator:
     def test_token_generation(self) -> None:
         from marlonthebug.collaborator.server import CollaboratorServer
+
         token1 = CollaboratorServer.generate_token(16)
         token2 = CollaboratorServer.generate_token(16)
         assert len(token1) == 16
@@ -226,6 +239,7 @@ class TestCollaborator:
 
     def test_callback_recording(self) -> None:
         from marlonthebug.collaborator.server import CollaboratorServer
+
         server = CollaboratorServer()
         server._record("test123", "1.2.3.4", "HTTP_GET", "/admin")
         assert server.has_callback("test123")
@@ -237,6 +251,7 @@ class TestCollaborator:
 class TestWorkspace:
     def test_create_workspace(self, tmp_path: Path) -> None:
         from marlonthebug.core.workspace import WorkspaceManager
+
         mgr = WorkspaceManager(base_dir=tmp_path)
         ws = mgr.create("test-ws")
         assert ws.name == "test-ws"
@@ -244,6 +259,7 @@ class TestWorkspace:
 
     def test_add_target(self, tmp_path: Path) -> None:
         from marlonthebug.core.workspace import WorkspaceManager
+
         mgr = WorkspaceManager(base_dir=tmp_path)
         ws = mgr.create("test-ws")
         mgr.add_targets(domains=["example.com", "api.example.com"])
@@ -251,6 +267,7 @@ class TestWorkspace:
 
     def test_list_workspaces(self, tmp_path: Path) -> None:
         from marlonthebug.core.workspace import WorkspaceManager
+
         mgr = WorkspaceManager(base_dir=tmp_path)
         mgr.create("ws1")
         mgr.create("ws2")
@@ -260,6 +277,7 @@ class TestWorkspace:
 
     def test_switch_workspace(self, tmp_path: Path) -> None:
         from marlonthebug.core.workspace import WorkspaceManager
+
         mgr = WorkspaceManager(base_dir=tmp_path)
         mgr.create("ws1")
         mgr.create("ws2")
@@ -268,6 +286,7 @@ class TestWorkspace:
 
     def test_delete_workspace(self, tmp_path: Path) -> None:
         from marlonthebug.core.workspace import WorkspaceManager
+
         mgr = WorkspaceManager(base_dir=tmp_path)
         mgr.create("ws1")
         mgr.delete("ws1")
@@ -277,7 +296,8 @@ class TestWorkspace:
 class TestEvents:
     @pytest.mark.asyncio
     async def test_emit_event(self) -> None:
-        from marlonthebug.core.events import EventBus, Event, EventType
+        from marlonthebug.core.events import Event, EventBus, EventType
+
         bus = EventBus()
         received: list[Event] = []
 
@@ -285,17 +305,20 @@ class TestEvents:
             received.append(event)
 
         bus.subscribe(EventType.FINDING_CREATED, handler)
-        await bus.emit_now(Event(
-            type=EventType.FINDING_CREATED,
-            source="test",
-            data={"key": "value"},
-        ))
+        await bus.emit_now(
+            Event(
+                type=EventType.FINDING_CREATED,
+                source="test",
+                data={"key": "value"},
+            )
+        )
         assert len(received) == 1
         assert received[0].data["key"] == "value"
 
     @pytest.mark.asyncio
     async def test_wildcard_handler(self) -> None:
-        from marlonthebug.core.events import EventBus, Event, EventType
+        from marlonthebug.core.events import Event, EventBus, EventType
+
         bus = EventBus()
         count = 0
 
@@ -312,6 +335,7 @@ class TestEvents:
 class TestFuzzer:
     def test_context_generators(self) -> None:
         from marlonthebug.fuzzer.generators import PayloadContext
+
         sql_payloads = PayloadContext.for_type("sqli")
         assert len(sql_payloads) > 0
 
@@ -320,6 +344,7 @@ class TestFuzzer:
 
     def test_parameter_context(self) -> None:
         from marlonthebug.fuzzer.generators import PayloadContext
+
         payloads = PayloadContext.generate_for_parameter("id")
         assert len(payloads) > 0
 
@@ -330,33 +355,38 @@ class TestFuzzer:
 class TestTechFingerprinter:
     def test_signature_count(self) -> None:
         import sys
-        import importlib
+
         if "marlonthebug.plugins.recon.tech_fingerprint" in sys.modules:
             del sys.modules["marlonthebug.plugins.recon.tech_fingerprint"]
         if "marlonthebug.plugins.base" in sys.modules:
             del sys.modules["marlonthebug.plugins.base"]
         from marlonthebug.plugins.recon.tech_fingerprint import TECH_SIGNATURES
+
         assert len(TECH_SIGNATURES) > 20
 
 
 class TestSecretFinder:
     def test_rules_count(self) -> None:
         import sys
+
         if "marlonthebug.plugins.recon.secret_finder" in sys.modules:
             del sys.modules["marlonthebug.plugins.recon.secret_finder"]
         if "marlonthebug.plugins.base" in sys.modules:
             del sys.modules["marlonthebug.plugins.base"]
         from marlonthebug.plugins.recon.secret_finder import SECRET_RULES
+
         assert len(SECRET_RULES) > 15
 
     def test_aws_key_pattern(self) -> None:
         import re
         import sys
+
         if "marlonthebug.plugins.recon.secret_finder" in sys.modules:
             del sys.modules["marlonthebug.plugins.recon.secret_finder"]
         if "marlonthebug.plugins.base" in sys.modules:
             del sys.modules["marlonthebug.plugins.base"]
         from marlonthebug.plugins.recon.secret_finder import SECRET_RULES
+
         aws_rule = next((r for r in SECRET_RULES if r["name"] == "AWS Access Key ID"), None)
         assert aws_rule is not None
         assert re.search(aws_rule["pattern"], "AKIAIOSFODNN7EXAMPLE")

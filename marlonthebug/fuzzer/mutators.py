@@ -1,7 +1,6 @@
 """Payload mutators — case flipping, encoding, injection, bypass techniques."""
 
 import random
-import string
 
 
 class Mutator:
@@ -49,10 +48,7 @@ class Mutator:
 
         half = len(payload) // 2
         if half > 0:
-            variants.append(
-                "".join(f"%{ord(c):02x}" for c in payload[:half])
-                + payload[half:]
-            )
+            variants.append("".join(f"%{ord(c):02x}" for c in payload[:half]) + payload[half:])
         return variants
 
     @staticmethod
@@ -68,8 +64,22 @@ class Mutator:
     @staticmethod
     def whitespace_mutations(payload: str) -> list[str]:
         variants = []
-        for space_alt in ["\\t", "\\n", "\\r", "\\v", "\\f", "%09", "%0a", "%0d", "%0b", "%0c",
-                           "/**/", "+", "--%0a", "#%0a"]:
+        for space_alt in [
+            "\\t",
+            "\\n",
+            "\\r",
+            "\\v",
+            "\\f",
+            "%09",
+            "%0a",
+            "%0d",
+            "%0b",
+            "%0c",
+            "/**/",
+            "+",
+            "--%0a",
+            "#%0a",
+        ]:
             if " " in payload:
                 variants.append(payload.replace(" ", space_alt))
         return variants

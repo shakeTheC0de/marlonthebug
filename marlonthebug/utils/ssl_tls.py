@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
-import ssl
 import socket
+import ssl
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -34,8 +35,17 @@ class SSLAnalysis:
 
 
 WEAK_CIPHERS = {
-    "RC4", "DES", "3DES", "MD5", "NULL", "anon", "EXPORT",
-    "RC2", "IDEA", "SEED", "CAMELLIA",
+    "RC4",
+    "DES",
+    "3DES",
+    "MD5",
+    "NULL",
+    "anon",
+    "EXPORT",
+    "RC2",
+    "IDEA",
+    "SEED",
+    "CAMELLIA",
 }
 
 
@@ -55,14 +65,16 @@ def analyze_ssl(host: str, port: int = 443) -> SSLAnalysis:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-            with socket.create_connection((host, port), timeout=5) as sock:
-                with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                    setattr(analysis, attr_name, True)
-                    cipher = ssock.cipher()
-                    if cipher:
-                        analysis.supported_ciphers.append(cipher[0])
-                        if any(w in cipher[0] for w in WEAK_CIPHERS):
-                            analysis.weak_ciphers.append(cipher[0])
+            with (
+                socket.create_connection((host, port), timeout=5) as sock,
+                ctx.wrap_socket(sock, server_hostname=host) as ssock,
+            ):
+                setattr(analysis, attr_name, True)
+                cipher = ssock.cipher()
+                if cipher:
+                    analysis.supported_ciphers.append(cipher[0])
+                    if any(w in cipher[0] for w in WEAK_CIPHERS):
+                        analysis.weak_ciphers.append(cipher[0])
         except Exception as e:
             logger.debug("%s check failed for %s: %s", tls_version, host, e)
 
@@ -71,45 +83,43 @@ def analyze_ssl(host: str, port: int = 443) -> SSLAnalysis:
         ctx.check_hostname = True
         ctx.verify_mode = ssl.CERT_REQUIRED
         import certifi
+
         ctx.load_verify_locations(certifi.where())
 
-        with socket.create_connection((host, port), timeout=5) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                cert = ssock.getpeercert()
-                analysis.certificate_valid = True
-                if cert:
-                    analysis.certificate_issuer = str(cert.get("issuer", ""))
-                    analysis.certificate_subject = str(cert.get("subject", ""))
-                    not_after = cert.get("notAfter", "")
-                    if not_after:
-                        from dateutil.parser import parse as parse_date
-                        try:
-                            analysis.certificate_expiry = parse_date(not_after)
-                        except Exception:
-                            pass
-                    san = cert.get("subjectAltName", [])
-                    analysis.certificate_san = [
-                        s[1] for s in san if isinstance(s, tuple) and len(s) > 1
-                    ]
+        with (
+            socket.create_connection((host, port), timeout=5) as sock,
+            ctx.wrap_socket(sock, server_hostname=host) as ssock,
+        ):
+            cert = ssock.getpeercert()
+            analysis.certificate_valid = True
+            if cert:
+                analysis.certificate_issuer = str(cert.get("issuer", ""))
+                analysis.certificate_subject = str(cert.get("subject", ""))
+                not_after = cert.get("notAfter", "")
+                if not_after:
+                    from dateutil.parser import parse as parse_date
+
+                    with contextlib.suppress(Exception):
+                        analysis.certificate_expiry = parse_date(not_after)
+                san = cert.get("subjectAltName", [])
+                analysis.certificate_san = [s[1] for s in san if isinstance(s, tuple) and len(s) > 1]
     except Exception as e:
         analysis.errors.append(f"Certificate validation: {e}")
 
     try:
         import httpx
+
         client = httpx.Client(timeout=5, verify=False, follow_redirects=True)
         response = client.get(f"https://{host}", headers={"Host": host})
         hsts = response.headers.get("Strict-Transport-Security", "")
         if hsts:
             analysis.hsts_enabled = True
             parts = dict(
-                item.strip().split("=", 1) if "=" in item else (item.strip(), None)
-                for item in hsts.split(";")
+                item.strip().split("=", 1) if "=" in item else (item.strip(), None) for item in hsts.split(";")
             )
-            if "max-age" in parts and parts["max-age"]:
-                try:
+            if parts.get("max-age"):
+                with contextlib.suppress(ValueError):
                     analysis.hsts_max_age = int(parts["max-age"])
-                except ValueError:
-                    pass
             analysis.hsts_include_subdomains = "includesubdomains" in hsts.lower()
             analysis.hsts_preload = "preload" in hsts.lower()
         client.close()

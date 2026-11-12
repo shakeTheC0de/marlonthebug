@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import ClassVar
 
 from rich.console import RenderableType
 from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.reactive import reactive
-from textual.widgets import Button, Footer, Header, Input, Label, ListView, ListItem, Static
+from textual.widgets import Button, Header, Input, Label, Static
 
 logger = logging.getLogger("marlonthebug.console")
 

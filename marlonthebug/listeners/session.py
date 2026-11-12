@@ -3,8 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger("marlonthebug.listeners")
 
@@ -17,7 +16,7 @@ class Session:
     user: str = ""
     hostname: str = ""
     platform: str = ""
-    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    connected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     disconnected_at: datetime | None = None
     active: bool = True
     reader: asyncio.StreamReader | None = None
@@ -65,7 +64,7 @@ class SessionManager:
         session = self._sessions.get(session_id)
         if session:
             session.active = False
-            session.disconnected_at = datetime.now(timezone.utc)
+            session.disconnected_at = datetime.now(UTC)
             if session.writer and not session.writer.is_closing():
                 session.writer.close()
             logger.info("[Session] Closed %s", session_id)

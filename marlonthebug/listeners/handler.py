@@ -1,11 +1,9 @@
 """Exploit listeners — TCP/HTTP/DNS handlers for reverse connections."""
 
 import asyncio
+import contextlib
 import logging
-import socket
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable
+from dataclasses import dataclass
 
 logger = logging.getLogger("marlonthebug.listeners")
 
@@ -28,23 +26,17 @@ class ListenerHandler:
     async def start(self) -> None:
         self._running = True
         if self.config.listener_type == "tcp":
-            self._server = await asyncio.start_server(
-                self._handle_tcp, self.config.host, self.config.port
-            )
+            self._server = await asyncio.start_server(self._handle_tcp, self.config.host, self.config.port)
             logger.info("[Listener] TCP server on %s:%d", self.config.host, self.config.port)
         elif self.config.listener_type == "http":
-            self._server = await asyncio.start_server(
-                self._handle_http, self.config.host, self.config.port
-            )
+            self._server = await asyncio.start_server(self._handle_http, self.config.host, self.config.port)
             logger.info("[Listener] HTTP server on %s:%d", self.config.host, self.config.port)
 
     async def stop(self) -> None:
         self._running = False
         for writer in self._connections:
-            try:
+            with contextlib.suppress(Exception):
                 writer.close()
-            except Exception:
-                pass
         self._connections.clear()
         if self._server:
             self._server.close()
@@ -65,17 +57,15 @@ class ListenerHandler:
                 if not data:
                     break
                 logger.info("[Listener][%s] %s", addr, data.decode("utf-8", errors="replace").rstrip())
-        except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
+        except (TimeoutError, ConnectionResetError, BrokenPipeError):
             pass
         finally:
             if writer in self._connections:
                 self._connections.remove(writer)
             if not writer.is_closing():
                 writer.close()
-                try:
+                with contextlib.suppress(Exception):
                     await writer.wait_closed()
-                except Exception:
-                    pass
 
     async def _handle_http(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -92,34 +82,26 @@ class ListenerHandler:
                     key, val = hl.split(":", 1)
                     headers[key.strip().lower()] = val.strip()
 
-            body = b""
             if "content-length" in headers:
                 cl = int(headers["content-length"])
-                body = await asyncio.wait_for(reader.readexactly(cl), timeout=5)
+                await asyncio.wait_for(reader.readexactly(cl), timeout=5)
 
             peername = writer.get_extra_info("peername")
             addr = f"{peername[0]}:{peername[1]}" if peername else "unknown"
             logger.info("[Listener][HTTP][%s] %s", addr, line)
 
             response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: text/plain\r\n"
-                b"Content-Length: 2\r\n"
-                b"Connection: close\r\n"
-                b"\r\n"
-                b"OK"
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
             )
             writer.write(response)
             await writer.drain()
-        except (asyncio.TimeoutError, ConnectionResetError):
+        except (TimeoutError, ConnectionResetError):
             pass
         finally:
             if not writer.is_closing():
                 writer.close()
-                try:
+                with contextlib.suppress(Exception):
                     await writer.wait_closed()
-                except Exception:
-                    pass
 
 
 class ListenerPool:

@@ -58,3 +58,6 @@ Thumbs.db
 *.spec.bak
 portable/
 release/
+
+# PyInstaller
+*.spec

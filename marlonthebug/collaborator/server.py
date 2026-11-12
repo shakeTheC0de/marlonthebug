@@ -1,13 +1,13 @@
 """OOB Collaborator server — async DNS + HTTP for blind vulnerability detection."""
 
 import asyncio
+import contextlib
 import logging
 import random
 import socket
 import string
-import struct
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger("marlonthebug.collaborator")
 
@@ -18,7 +18,7 @@ class CallbackRecord:
     source_ip: str
     request_type: str
     data: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class CollaboratorServer:
@@ -64,16 +64,13 @@ class CollaboratorServer:
         if token not in self._callbacks:
             self._callbacks[token] = []
         self._callbacks[token].append(record)
-        logger.info("[Collaborator] Callback from %s for token %s (%s): %s",
-                     source_ip, token, request_type, data[:100])
+        logger.info("[Collaborator] Callback from %s for token %s (%s): %s", source_ip, token, request_type, data[:100])
 
     async def start(self) -> None:
         self._running = True
         loop = asyncio.get_event_loop()
 
-        self._http_server = await asyncio.start_server(
-            self._handle_http, self.http_host, self.http_port
-        )
+        self._http_server = await asyncio.start_server(self._handle_http, self.http_host, self.http_port)
         logger.info("[Collaborator] HTTP server on %s:%d", self.http_host, self.http_port)
 
         try:
@@ -81,9 +78,7 @@ class CollaboratorServer:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind((self.dns_host, self.dns_port))
             sock.setblocking(False)
-            self._dns_transport, _ = await loop.create_datagram_endpoint(
-                lambda: self._DNSProtocol(self), sock=sock
-            )
+            self._dns_transport, _ = await loop.create_datagram_endpoint(lambda: self._DNSProtocol(self), sock=sock)
             logger.info("[Collaborator] DNS server on %s:%d", self.dns_host, self.dns_port)
         except PermissionError:
             logger.warning("[Collaborator] Cannot bind DNS on port %d (need root). DNS disabled.", self.dns_port)
@@ -131,24 +126,17 @@ class CollaboratorServer:
                 self._record(token, source_ip, f"HTTP_{method}", body.decode("utf-8", errors="replace")[:500])
 
             response = (
-                b"HTTP/1.1 200 OK\r\n"
-                b"Content-Type: text/plain\r\n"
-                b"Content-Length: 2\r\n"
-                b"Connection: close\r\n"
-                b"\r\n"
-                b"OK"
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
             )
             writer.write(response)
             await writer.drain()
-        except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
+        except (TimeoutError, ConnectionResetError, BrokenPipeError):
             pass
         finally:
             if not writer.is_closing():
                 writer.close()
-                try:
+                with contextlib.suppress(Exception):
                     await writer.wait_closed()
-                except Exception:
-                    pass
 
     class _DNSProtocol(asyncio.DatagramProtocol):
         def __init__(self, server: "CollaboratorServer") -> None:
@@ -165,9 +153,7 @@ class CollaboratorServer:
                     parts = domain.lower().rstrip(".").split(".")
                     if parts:
                         token = parts[0]
-                        self._server._record(
-                            token, addr[0], "DNS", domain
-                        )
+                        self._server._record(token, addr[0], "DNS", domain)
                     response = self._build_response(data, addr)
                     if self._transport:
                         self._transport.sendto(response, addr)

@@ -1,256 +1,104 @@
-# MarlonTheBug — Architecture Documentation
+# MarlonTheBug 2.0 — Arquitectura
 
-## Overview
+## Visión general
 
-MarlonTheBug is a modular, async-first offensive security platform built in Python. It uses a dual-engine architecture separating detection/analysis from exploitation/action, with strict safety gates between them.
+MarlonTheBug es una aplicación local-first con tres planos:
 
-## Directory Map
-
-```
-marlonthebug/
-├── pyproject.toml              # Project config (uv, dependencies, tool settings)
-├── config/default.yaml         # Default runtime configuration
-├── alembic.ini                 # Database migration config
-├── marlonthebug/
-│   ├── main.py                 # CLI entry point
-│   ├── __init__.py             # Version + logging init
-│   │
-│   ├── cli/                    # CLI / TUI Layer
-│   │   ├── app.py              # Typer command groups (workspace, recon, audit, etc.)
-│   │   ├── console.py          # Textual TUI interactive shell
-│   │   ├── commands/           # Future: separated command modules
-│   │   └── widgets/            # Future: custom TUI widgets
-│   │
-│   ├── core/                   # Core Engine
-│   │   ├── engine.py           # Orchestration engine (plugin lifecycle, scan coordination)
-│   │   ├── workspace.py        # Workspace manager (CRUD, multi-target scoping)
-│   │   ├── scope.py            # Scope guard (domain/IP validation, exploitation gates)
-│   │   ├── scheduler.py        # Async task scheduler (semaphore-based concurrency)
-│   │   ├── pipeline.py         # Plugin chaining (recon → audit → exploit)
-│   │   └── events.py           # Async pub/sub event bus
-│   │
-│   ├── http/                   # HTTP Engine
-│   │   ├── client.py           # Async httpx wrapper (retry, backoff, UA rotation)
-│   │   ├── session_pool.py     # Per-target cookie jars and connection reuse
-│   │   ├── proxy.py            # SOCKS5/HTTP proxy rotation
-│   │   └── waf.py              # WAF fingerprinting (10+ signatures)
-│   │
-│   ├── collaborator/           # OOB Server (Burp Collaborator equivalent)
-│   │   ├── server.py           # Async DNS (UDP) + HTTP callback server
-│   │   └── token.py            # Per-scan correlation tokens
-│   │
-│   ├── crawler/                # Intelligent Spider
-│   │   └── spider.py           # Async crawler (robots.txt, sitemap, JS parsing)
-│   │
-│   ├── fuzzer/                 # Adaptive Fuzzer
-│   │   ├── engine.py           # Response analysis engine with baseline comparison
-│   │   ├── mutators.py         # 8 payload mutation strategies
-│   │   ├── generators.py       # Context-aware payload generation by parameter type
-│   │   └── wordlists/          # 7 curated wordlists
-│   │
-│   ├── db/                     # Database Layer
-│   │   ├── base.py             # SQLAlchemy declarative base + type annotations
-│   │   ├── models.py           # 7 models (Workspace, Target, Finding, Exploit, etc.)
-│   │   ├── repository.py       # Async repository pattern with full CRUD
-│   │   └── migrations/         # Alembic migration environment
-│   │
-│   ├── output/                 # Reporting Engine
-│   │   ├── cvss.py             # CVSS 3.1 vector parser and calculator
-│   │   ├── reports.py          # Report generator (JSON/Markdown/HTML)
-│   │   ├── formatters.py       # Output formatters with severity badges
-│   │   └── templates/          # Future: Jinja2 report templates
-│   │
-│   ├── listeners/              # Exploit Infrastructure
-│   │   ├── handler.py          # TCP + HTTP listener pool
-│   │   └── session.py          # Active session manager
-│   │
-│   ├── plugins/                # Plugin System
-│   │   ├── base.py             # BasePlugin ABC + Finding dataclass + Severity enum
-│   │   ├── registry.py         # Auto-discovery via importlib/pkgutil
-│   │   ├── loader.py           # Hot-load system with dependency resolution
-│   │   ├── recon/              # 7 reconnaissance plugins
-│   │   │   ├── subdomain_enum.py    # CT logs + DNS brute force
-│   │   │   ├── dns_bruteforce.py    # Async DNS resolution with wildcard detection
-│   │   │   ├── tech_fingerprint.py  # 35+ tech signatures
-│   │   │   ├── endpoint_discovery.py # Directory/file brute force
-│   │   │   ├── js_analyzer.py       # JS endpoint + secret extraction
-│   │   │   ├── secret_finder.py     # 25 regex rules for secrets
-│   │   │   └── git_leaks.py         # .git exposure + content scanning
-│   │   ├── web/                # Phase 2: Web auditing plugins
-│   │   ├── auth/               # Phase 3: Auth & access control
-│   │   ├── api/                # Phase 3: API security
-│   │   ├── cloud/              # Phase 4: Cloud & containers
-│   │   ├── cicd/               # Phase 5: CI/CD & supply chain
-│   │   └── llm/                # Phase 6: AI/LLM security
-│   │
-│   ├── exploit/                # Exploitation Modules
-│   │   ├── base.py             # BaseExploit ABC (check/run/cleanup lifecycle)
-│   │   ├── registry.py         # Exploit registry with finding-to-exploit mapping
-│   │   ├── payloads/           # Payload generation system
-│   │   │   ├── generator.py    # Dynamic payload builder (10+ languages)
-│   │   │   ├── reverse_shells.py  # 60+ reverse shell commands
-│   │   │   ├── web_shells.py   # PHP/ASPX/JSP web shells
-│   │   │   └── encoders.py     # 12 encoding methods
-│   │   ├── webapp/             # Phase 2: Web exploit modules
-│   │   ├── auth/               # Phase 3: Auth exploit modules
-│   │   ├── infra/              # Phase 4: Infrastructure exploit modules
-│   │   └── post/               # Post-exploitation modules
-│   │
-│   └── utils/                  # Shared Utilities
-│       ├── dns.py              # Async DNS resolver + zone transfer
-│       ├── ssl_tls.py          # TLS + certificate analyzer
-│       ├── headers.py          # Security header + CSP + CORS + cookie analyzer
-│       └── logging.py          # Loguru setup
-│
-└── tests/
-    ├── conftest.py             # Pytest fixtures
-    └── test_core.py            # 41 unit tests
-```
-
-## Data Flow
-
-### Scan Pipeline
+1. **Plano de datos**: SQLite + SQLAlchemy async. Es la fuente de verdad para proyectos, activos, análisis, hallazgos, informes, auditoría e inteligencia.
+2. **Plano de ejecución**: `ScanManager` orquesta crawler, cliente HTTP compartido, scope guard, rate limiter y plugins. Cada scan tiene un `ScanContext` y un presupuesto de peticiones.
+3. **Plano de presentación**: panel FastAPI + Jinja2 + CSS/JS propios, sin CDN ni build de Node. La API JSON queda disponible para integraciones futuras.
 
 ```
-User Command
-    │
-    ▼
-Engine.run_full(targets)
-    │
-    ├─► Engine.run_recon(targets)
-    │       │
-    │       ├─► PluginLoader loads recon plugins
-    │       ├─► Pipeline.run_stage(RECON, plugins, targets)
-    │       │       │
-    │       │       ├─► plugin.setup(workspace)
-    │       │       ├─► async for finding in plugin.run(target):
-    │       │       │       yield finding → EventBus.emit(FINDING_CREATED)
-    │       │       ├─► plugin.teardown()
-    │       │       └─► return PipelineResult
-    │       │
-    │       └─► Findings saved to DB via Repository
-    │
-    ├─► Engine.run_audit(targets, categories=["web","api","auth"])
-    │       │  (same flow but with audit plugins)
-    │       └─► Uses recon-discovered targets and endpoints
-    │
-    └─► ReportGenerator.generate_json/markdown/html(findings)
+┌─────────────────────────────────────────────────────────────┐
+│ Panel web local (FastAPI + Jinja2)   CLI (Typer)            │
+├─────────────────────────────────────────────────────────────┤
+│ API JSON · SSE de progreso · informes · triaje             │
+├─────────────────────────────────────────────────────────────┤
+│ ScanManager                                                 │
+│  ├─ ScanContext (scope, rate limit, baseline, presupuesto)  │
+│  ├─ Crawler compartido                                      │
+│  ├─ Plugins recon / web / api / llm                         │
+│  └─ Persistencia y deduplicación                            │
+├─────────────────────────────────────────────────────────────┤
+│ IntelService (KEV · EPSS · NVD · OSV · bundles offline)     │
+├─────────────────────────────────────────────────────────────┤
+│ SQLite + SQLAlchemy + Alembic                               │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Exploitation Flow
+## Flujo de un análisis
 
 ```
-User: exploit <finding-id>
-    │
-    ▼
-ScopeGuard.check_exploitation(target)
-    │ (validates target is in scope + exploitation enabled)
-    ▼
-ScopeGuard.confirm(target, "exploit")
-    │ (user confirmation if required)
-    ▼
-ExploitRegistry.find_for_finding(plugin_name)
-    │ (finds matching exploit module)
-    ▼
-exploit.check(target, finding)
-    │ (verifies exploitability)
-    ▼
-PayloadGenerator.reverse_shell(config)
-    │ (generates appropriate payload)
-    ▼
-ListenerPool.start(name, config)
-    │ (starts TCP/HTTP listener)
-    ▼
-exploit.run(target, finding, payload)
-    │ (delivers exploit, connects to listener)
-    ▼
-SessionManager.create(reader, writer, target)
-    │ (creates session record)
-    ▼
-User: sessions -i <id>
-    │ (interactive shell session)
-    ▼
-post/persistence, post/pivot, post/cleanup
+POST /scans
+  → valida autorización y alcance
+  → crea ScanRun (pending)
+  → ScanManager.start()
+      → ScanContext.create()  (cliente httpx, scope, rate limit)
+      → resuelve base URL https/http
+      → build_baseline()      (catch-all / soft-404)
+      → Crawler.crawl()       (endpoints, forms, JS)
+      → plugins en paralelo (semáforo)
+          → Finding
+          → normalización + fingerprint
+          → upsert con deduplicación
+          → evento SSE al panel
+      → stats + logs + estado final
 ```
 
-## Key Design Decisions
+## Modelo de datos
 
-### Why Async?
-The platform needs to scan thousands of endpoints (subdomains, directories, parameters) concurrently. Async I/O allows hundreds of concurrent HTTP/DNS requests with minimal resource overhead.
+| Tabla | Propósito |
+|---|---|
+| `workspaces` | Proyecto, cliente, alcance, autorización y flags de explotación |
+| `targets` | Activos, tecnologías, puertos y metadatos |
+| `scan_runs` | Ejecuciones, perfil, opciones, estado, estadísticas y logs |
+| `findings` | Hallazgos deduplicados, CVSS, CWE, OWASP, confianza, estado, evidencia, KEV/EPSS |
+| `reports` | Entregables generados y metadatos |
+| `audit_log` | Acciones sensibles |
+| `intel_feeds` | Estado de KEV, EPSS, NVD y OSV |
+| `cves` | Caché local de vulnerabilidades |
+| `asset_intel` | Correlación activo ↔ CVE |
 
-### Why Plugin Architecture?
-Security tools must be extensible. New vulnerability classes emerge constantly. A plugin system allows adding new modules without modifying core engine code.
+Un hallazgo se identifica por `workspace_id + fingerprint`, donde el fingerprint combina plugin, título, endpoint, host y parámetro. Así se evita duplicar el mismo resultado en scans sucesivos sin perder el histórico (`occurrences`).
 
-### Why Dual Engine?
-Separation of audit (detection) and exploitation (action) reduces accidental exploitation risks. The scope guard provides a single gate through which all exploit actions must pass.
+## Scope guard
 
-### Why SQLite (initially)?
-Zero-config deployment. Users can start scanning immediately without setting up PostgreSQL. The repository pattern allows seamless migration when needed.
+`ScopeConfig` es **fail-closed**: sin dominios o rangos explícitos no se autoriza nada. `AsyncHTTPClient` valida cada URL antes de enviarla y lanza `ScopeViolation` si queda fuera. Los targets añadidos al proyecto actualizan automáticamente el alcance con su host (sin puerto).
 
-### Why Workspace-Based?
-Multi-target audits require scope management, target tracking, and finding organization. Workspaces group everything under a named project with independent scope configuration.
+## Baseline y falsos positivos
 
-## Extension Guide
+`http/baseline.py` solicita rutas aleatorias y compara estado, longitud, título y similitud de cuerpo. Los plugins de descubrimiento y `.git` solo reportan si el contenido supera Validación específica:
 
-### Adding a New Reconnaissance Plugin
+- `.git/HEAD` debe contener una referencia Git real.
+- `.git/config` debe contener `[core]`.
+- `.env` debe contener pares clave/valor.
+- `robots.txt` debe contener directivas.
+- `package.json` debe ser JSON con dependencias.
 
-1. Create `marlonthebug/plugins/recon/my_scanner.py`:
+Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTTP 200 para cualquier ruta.
 
-```python
-from marlonthebug.plugins.base import BasePlugin, Finding, Severity
+## Inteligencia
 
-class MyScanner(BasePlugin):
-    name = "my_scanner"
-    version = "1.0.0"
-    description = "My custom scanner"
-    category = "recon"
+- **KEV**: descarga del catálogo CISA y actualización de `cves`.
+- **EPSS**: descarga del CSV diario y actualización de scores.
+- **NVD**: consulta bajo demanda para detalle técnico.
+- **OSV**: consulta por ecosistema/paquete/versión desde supply chain.
+- **Offline**: exportación/importación de bundles JSON.
 
-    async def setup(self, workspace):
-        self.workspace = workspace
+## Portabilidad
 
-    async def run(self, target, options=None):
-        yield Finding(
-            plugin_name=self.name,
-            title="Found something",
-            description="Description of finding",
-            severity=Severity.HIGH,
-            cvss_score=7.5,
-            endpoint=target.host,
-            target_host=target.host,
-            category=self.category,
-        )
-```
+- `AppPaths` resuelve datos, configuración, informes, logs, caché y token.
+- `--portable` guarda todo en `./data`.
+- SQLite usa journal `DELETE` en modo portable para evitar problemas en USB/red.
+- El cliente HTTP, los feeds y el panel no dependen de servicios externos.
+- Los binarios se generan con PyInstaller en CI para macOS, Linux y Windows.
+- Docker usa WeasyPrint para PDF; el binario local usa Chrome/Edge si está disponible y cae a HTML si no.
 
-The plugin is auto-discovered on next launch.
+## Seguridad del panel
 
-### Adding a New Exploit Module
-
-1. Create `marlonthebug/exploit/webapp/my_exploit.py`:
-
-```python
-from marlonthebug.exploit.base import BaseExploit, ExploitResult
-
-class MyExploit(BaseExploit):
-    name = "my_exploit"
-    category = "webapp"
-    description = "Exploits my vulnerability"
-
-    async def check(self, target, finding):
-        # Verify exploitability
-        return True
-
-    async def run(self, target, finding, payload=None):
-        # Execute exploit
-        return ExploitResult(success=True, output="Exploited!")
-```
-
-2. Register the finding-to-exploit mapping:
-
-```python
-from marlonthebug.exploit.registry import ExploitRegistry
-registry.map_finding("my_scanner", "webapp/my_exploit")
-```
-
-### Adding a New Wordlist
-
-Place a `.txt` file in `marlonthebug/fuzzer/wordlists/` and reference it by name in the fuzzer configuration.
+- Escucha en `127.0.0.1` por defecto.
+- Token aleatorio en `panel.token` (0600) y cookie `HttpOnly`, `SameSite=Strict`.
+- CSRF en formularios y acciones de escritura.
+- CSP, `X-Frame-Options`, `nosniff` y `Referrer-Policy`.
+- Sin telemetría.
+- Modo remoto solo con `--host` explícito; si se desactiva auth se avisa por consola.

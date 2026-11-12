@@ -15,7 +15,7 @@ class CVSS31:
     UI: str = "N"
     S: str = "U"
     C: str = "N"
-    I: str = "N"
+    I: str = "N"  # noqa: E741
     A: str = "N"
 
     _WEIGHTS: ClassVar[dict[str, dict[str, float]]] = {
@@ -45,14 +45,13 @@ class CVSS31:
 
     def to_vector(self) -> str:
         return (
-            f"CVSS:3.1/AV:{self.AV}/AC:{self.AC}/PR:{self.PR}"
-            f"/UI:{self.UI}/S:{self.S}/C:{self.C}/I:{self.I}/A:{self.A}"
+            f"CVSS:3.1/AV:{self.AV}/AC:{self.AC}/PR:{self.PR}/UI:{self.UI}/S:{self.S}/C:{self.C}/I:{self.I}/A:{self.A}"
         )
 
     def base_score(self) -> float:
-        iss = 1 - ((1 - self._WEIGHTS["C"][self.C]) *
-                   (1 - self._WEIGHTS["I"][self.I]) *
-                   (1 - self._WEIGHTS["A"][self.A]))
+        iss = 1 - (
+            (1 - self._WEIGHTS["C"][self.C]) * (1 - self._WEIGHTS["I"][self.I]) * (1 - self._WEIGHTS["A"][self.A])
+        )
 
         if self.S == "U":
             impact = self._WEIGHTS["S_CHANGED"] if False else 6.42 * iss
@@ -71,10 +70,7 @@ class CVSS31:
         if impact <= 0:
             return 0.0
 
-        if self.S == "U":
-            score = impact + exploitability
-        else:
-            score = 1.08 * (impact + exploitability)
+        score = impact + exploitability if self.S == "U" else 1.08 * (impact + exploitability)
 
         return float(math.ceil(min(score, 10.0) * 10) / 10)
 
