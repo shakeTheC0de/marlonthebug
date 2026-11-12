@@ -1,8 +1,9 @@
 """Workspace manager for multi-target scoping and session management."""
 
+import contextlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,8 +32,8 @@ class Workspace:
     path: Path
     scope: ScopeConfig = field(default_factory=ScopeConfig)
     targets: dict[str, TargetInfo] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def add_target(self, host: str, target_type: str = "unknown", **kwargs: object) -> TargetInfo:
         host = host.lower().strip()
@@ -41,11 +42,11 @@ class Workspace:
             if target_type != "unknown":
                 existing.type = target_type
             existing.metadata.update(kwargs)
-            self.updated_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(UTC)
             return existing
         target = TargetInfo(host=host, type=target_type, metadata=dict(kwargs))
         self.targets[host] = target
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         return target
 
     def get_target(self, host: str) -> TargetInfo | None:
@@ -55,7 +56,7 @@ class Workspace:
         host = host.lower().strip()
         if host in self.targets:
             del self.targets[host]
-            self.updated_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(UTC)
             return True
         return False
 
@@ -136,10 +137,8 @@ class WorkspaceManager:
             name = sf.read_text().strip()
             ws_path = self.base_dir / name
             if (ws_path / "workspace.yaml").exists():
-                try:
+                with contextlib.suppress(Exception):
                     self._current = Workspace.load(ws_path)
-                except Exception:
-                    pass
 
     def _save_current(self) -> None:
         if self._current:
@@ -185,10 +184,10 @@ class WorkspaceManager:
     def add_targets(self, domains: list[str] | None = None, ips: list[str] | None = None) -> None:
         if not self._current:
             raise RuntimeError("No active workspace")
-        for domain in (domains or []):
+        for domain in domains or []:
             self._current.scope.allowed_domains.append(domain.lower().strip())
             self._current.add_target(domain.lower().strip(), type="web")
-        for ip in (ips or []):
+        for ip in ips or []:
             self._current.scope.allowed_ip_ranges.append(ip.strip())
         self._current.save()
 

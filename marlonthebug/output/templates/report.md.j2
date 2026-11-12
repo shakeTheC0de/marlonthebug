@@ -1,0 +1,111 @@
+# {{ title }}
+
+**{{ 'Cliente' if language == 'es' else 'Client' }}:** {{ client_name }}  
+**{{ 'Proyecto' if language == 'es' else 'Project' }}:** {{ workspace.name }}  
+**{{ 'Fecha' if language == 'es' else 'Date' }}:** {{ generated_at_text }}  
+**{{ 'Clasificación' if language == 'es' else 'Classification' }}:** {{ classification }}  
+**{{ 'Riesgo global' if language == 'es' else 'Overall risk' }}:** {{ risk }}  
+**{{ 'Herramienta' if language == 'es' else 'Tool' }}:** MarlonTheBug 2.0
+
+---
+
+## {{ '1. Resumen ejecutivo' if language == 'es' else '1. Executive summary' }}
+
+{{ 'Se ha realizado una auditoría de seguridad sobre' if language == 'es' else 'A security assessment was performed against' }} **{{ target_hosts|length }} {{ 'objetivo(s)' if language == 'es' else 'target(s)' }}** {{ 'del proyecto' if language == 'es' else 'in project' }} **{{ workspace.name }}**.
+
+| {{ 'Severidad' if language == 'es' else 'Severity' }} | {{ 'Cantidad' if language == 'es' else 'Count' }} |
+|---|---:|
+{% for severity in severity_order -%}
+| {{ severity_labels.get(severity, severity) }} | {{ stats.severity.get(severity, 0) }} |
+{% endfor %}
+
+**{{ 'Hallazgos KEV' if language == 'es' else 'KEV findings' }}:** {{ stats.kev }}  
+**{{ 'Total' if language == 'es' else 'Total' }}:** {{ stats.total }}
+
+### {{ 'Hallazgos prioritarios' if language == 'es' else 'Priority findings' }}
+
+{% if findings -%}
+| # | {{ 'Hallazgo' if language == 'es' else 'Finding' }} | {{ 'Severidad' if language == 'es' else 'Severity' }} | CVSS | {{ 'Objetivo' if language == 'es' else 'Target' }} |
+|---:|---|---|---:|---|
+{% for finding in findings[:10] -%}
+| {{ loop.index }} | {{ finding.title }}{% if finding.kev %} **KEV**{% endif %} | {{ severity_labels.get(finding.severity, finding.severity) }} | {{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }} | `{{ finding.target_host }}` |
+{% endfor %}
+{% else -%}
+{{ 'No se identificaron hallazgos.' if language == 'es' else 'No findings were identified.' }}
+{% endif %}
+
+### {{ 'Recomendaciones' if language == 'es' else 'Recommendations' }}
+
+1. {{ 'Remediar primero los hallazgos críticos, altos y los marcados como KEV.' if language == 'es' else 'Remediate critical, high and KEV findings first.' }}
+2. {{ 'Aplicar las correcciones técnicas descritas en este informe.' if language == 'es' else 'Apply the technical fixes described in this report.' }}
+3. {{ 'Reducir la superficie expuesta y revisar configuraciones de seguridad.' if language == 'es' else 'Reduce exposed surface and review security configurations.' }}
+4. {{ 'Programar un retest para verificar las correcciones.' if language == 'es' else 'Schedule a retest to verify fixes.' }}
+
+---
+
+## {{ '2. Alcance y metodología' if language == 'es' else '2. Scope and methodology' }}
+
+- **{{ 'Objetivos' if language == 'es' else 'Targets' }}:** {{ target_hosts|join(', ') if target_hosts else '—' }}
+- **{{ 'Análisis' if language == 'es' else 'Scan' }}:** {{ scan.profile if scan else 'Proyecto completo' }}
+- **{{ 'Metodología' if language == 'es' else 'Methodology' }}:** {{ 'Reconocimiento, crawling, detección, validación y reporte con límites de velocidad.' if language == 'es' else 'Reconnaissance, crawling, detection, validation and reporting with rate limits.' }}
+
+---
+
+## {{ '3. Hallazgos técnicos' if language == 'es' else '3. Technical findings' }}
+
+{% for finding in findings %}
+### {{ loop.index }}. {{ finding.title }}
+
+- **{{ 'Severidad' if language == 'es' else 'Severity' }}:** {{ severity_labels.get(finding.severity, finding.severity) }}
+- **CVSS:** {{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}{% if finding.cvss_vector %} (`{{ finding.cvss_vector }}`){% endif %}
+- **{{ 'Confianza' if language == 'es' else 'Confidence' }}:** {{ finding.confidence }}
+- **{{ 'Estado' if language == 'es' else 'Status' }}:** {{ status_labels.get(finding.status, finding.status) }}
+- **{{ 'Objetivo' if language == 'es' else 'Target' }}:** `{{ finding.target_host }}`
+- **Endpoint:** `{{ finding.endpoint or '—' }}`
+- **{{ 'Categoría' if language == 'es' else 'Category' }}:** {{ category_labels.get(finding.category, finding.category) }}
+- **CWE:** {{ finding.cwe or '—' }}
+- **OWASP:** {{ finding.owasp or '—' }}
+- **KEV:** {{ 'Sí' if finding.kev else 'No' }}
+
+{{ finding.description }}
+
+{% if include_evidence and finding.evidence -%}
+**{{ 'Evidencia' if language == 'es' else 'Evidence' }}:**
+
+```json
+{{ finding.evidence|tojson(indent=2) }}
+```
+{% endif %}
+{% if include_remediation and finding.remediation -%}
+**{{ 'Remediación' if language == 'es' else 'Remediation' }}:** {{ finding.remediation }}
+{% endif %}
+{% if include_waf_rules and finding.waf_rules -%}
+**{{ 'Reglas WAF' if language == 'es' else 'WAF rules' }}:**
+
+{% for rule in finding.waf_rules -%}
+```text
+{{ rule }}
+```
+{% endfor %}
+{% endif %}
+{% if finding.references -%}
+**{{ 'Referencias' if language == 'es' else 'References' }}:**
+{% for reference in finding.references -%}
+- {{ reference.url if reference is mapping else reference }}
+{% endfor %}
+{% endif %}
+
+---
+{% endfor %}
+
+## {{ 'Anexo. Escala de severidad' if language == 'es' else 'Appendix. Severity scale' }}
+
+| {{ 'Severidad' if language == 'es' else 'Severity' }} | CVSS |
+|---|---:|
+| {{ 'Crítica' if language == 'es' else 'Critical' }} | 9.0 – 10.0 |
+| {{ 'Alta' if language == 'es' else 'High' }} | 7.0 – 8.9 |
+| {{ 'Media' if language == 'es' else 'Medium' }} | 4.0 – 6.9 |
+| {{ 'Baja' if language == 'es' else 'Low' }} | 0.1 – 3.9 |
+| {{ 'Informativa' if language == 'es' else 'Informational' }} | 0.0 |
+
+> {{ 'Documento confidencial generado por MarlonTheBug.' if language == 'es' else 'Confidential document generated by MarlonTheBug.' }}

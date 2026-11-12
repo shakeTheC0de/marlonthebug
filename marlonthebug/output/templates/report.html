@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+  :root {
+    --ink: #101827;
+    --muted: #5b6b80;
+    --line: #dbe3ec;
+    --soft: #f4f7fb;
+    --critical: #b91c1c;
+    --high: #c2410c;
+    --medium: #a16207;
+    --low: #0369a1;
+    --info: #475569;
+    --accent: #0e7490;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; background: #fff; }
+  h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
+  h2 { font-size: 19pt; margin: 0 0 10pt; padding-bottom: 6pt; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 12.5pt; margin: 0 0 5pt; }
+  h4 { font-size: 10.5pt; margin: 12pt 0 4pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  p { margin: 0 0 8pt; }
+  a { color: var(--accent); text-decoration: none; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 8.6pt; }
+  pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 7.7pt; line-height: 1.45; background: #0b1220; color: #dbe7f5; padding: 8pt; border-radius: 4pt; white-space: pre-wrap; word-break: break-word; margin: 4pt 0 8pt; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 12pt; font-size: 9pt; }
+  th { text-align: left; background: #eef3f8; color: #334155; font-size: 7.8pt; text-transform: uppercase; letter-spacing: .07em; padding: 6pt 7pt; border-bottom: 1px solid var(--line); }
+  td { padding: 6pt 7pt; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .page { padding: 0; page-break-before: always; }
+  .cover { page-break-after: always; min-height: 257mm; display: flex; flex-direction: column; background: #0b1220; color: #e8eef7; padding: 18mm 16mm; position: relative; overflow: hidden; }
+  .cover::before { content: ""; position: absolute; width: 260mm; height: 260mm; border-radius: 50%; right: -120mm; top: -120mm; background: radial-gradient(circle, rgba(34,211,238,.22), transparent 65%); }
+  .cover-top { display: flex; justify-content: space-between; align-items: center; font-size: 8pt; letter-spacing: .16em; text-transform: uppercase; color: #8fa6c0; }
+  .cover-classification { border: 1px solid rgba(251,113,133,.45); color: #fecdd3; padding: 3pt 8pt; border-radius: 3pt; font-weight: 700; }
+  .cover-brand { display: flex; align-items: center; gap: 10pt; margin-top: 28mm; position: relative; }
+  .cover-mark { width: 42pt; height: 42pt; border-radius: 10pt; border: 1.5pt solid #22d3ee; display: flex; align-items: center; justify-content: center; color: #22d3ee; font-weight: 800; font-size: 18pt; }
+  .cover-brand strong { display: block; font-size: 17pt; letter-spacing: -.02em; }
+  .cover-brand small { display: block; color: #8fa6c0; font-size: 8pt; letter-spacing: .16em; text-transform: uppercase; margin-top: 2pt; }
+  .cover-main { margin-top: 26mm; position: relative; }
+  .kicker { color: #22d3ee; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .2em; font-weight: 700; }
+  .cover h1 { font-size: 31pt; line-height: 1.08; margin: 8pt 0 10pt; letter-spacing: -.03em; max-width: 150mm; }
+  .cover .subtitle { color: #9fb3c8; font-size: 13pt; }
+  .cover-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10pt; margin-top: 24mm; position: relative; border-top: 1px solid rgba(148,163,184,.25); padding-top: 8pt; }
+  .cover-meta span { display: block; color: #7f95ad; font-size: 7.4pt; text-transform: uppercase; letter-spacing: .12em; }
+  .cover-meta strong { display: block; font-size: 9.5pt; margin-top: 3pt; color: #e8eef7; font-weight: 600; }
+  .cover-risk { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12pt; border: 1px solid rgba(148,163,184,.25); background: rgba(15,23,36,.7); border-radius: 8pt; padding: 12pt 14pt; position: relative; }
+  .cover-risk-label { color: #8fa6c0; font-size: 8pt; text-transform: uppercase; letter-spacing: .14em; }
+  .cover-risk-value { font-size: 26pt; font-weight: 800; letter-spacing: -.04em; }
+  .risk-critical { color: #fecdd3; } .risk-high { color: #fdba74; } .risk-medium { color: #fde68a; } .risk-low { color: #a7f3d0; } .risk-info { color: #cbd5e1; }
+  .cover-footer { display: flex; justify-content: space-between; gap: 12pt; margin-top: 10mm; color: #6f849b; font-size: 7.4pt; position: relative; }
+  .section-intro { color: var(--muted); font-size: 10pt; margin-bottom: 12pt; }
+  .kv { display: grid; grid-template-columns: 40mm 1fr; gap: 3pt 8pt; margin: 8pt 0 12pt; }
+  .kv dt { color: var(--muted); font-size: 8.5pt; }
+  .kv dd { margin: 0; }
+  .badge { display: inline-block; padding: 1.5pt 6pt; border-radius: 3pt; font-size: 7.2pt; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+  .b-critical { background: #fee2e2; color: #991b1b; }
+  .b-high { background: #ffedd5; color: #9a3412; }
+  .b-medium { background: #fef3c7; color: #92400e; }
+  .b-low { background: #e0f2fe; color: #075985; }
+  .b-info { background: #e2e8f0; color: #334155; }
+  .callout { border-left: 3pt solid var(--accent); background: #f0f9fc; padding: 8pt 10pt; margin: 10pt 0; border-radius: 0 4pt 4pt 0; }
+  .callout.warn { border-left-color: #f59e0b; background: #fffbeb; }
+  .callout.danger { border-left-color: #dc2626; background: #fef2f2; }
+  .callout p:last-child { margin-bottom: 0; }
+  .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6pt; margin: 10pt 0 14pt; }
+  .stat-box { border: 1px solid var(--line); border-radius: 5pt; padding: 8pt; text-align: center; }
+  .stat-box strong { display: block; font-size: 19pt; line-height: 1; }
+  .stat-box span { display: block; color: var(--muted); font-size: 7.3pt; text-transform: uppercase; letter-spacing: .08em; margin-top: 4pt; }
+  .finding { border: 1px solid var(--line); border-radius: 6pt; padding: 10pt 12pt; margin: 0 0 12pt; page-break-inside: avoid; }
+  .finding-head { display: flex; gap: 9pt; align-items: flex-start; border-bottom: 1px solid var(--line); padding-bottom: 7pt; margin-bottom: 8pt; }
+  .finding-number { flex: 0 0 22pt; height: 22pt; border-radius: 50%; background: #0e7490; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 8.5pt; font-weight: 800; }
+  .finding-heading { flex: 1; }
+  .finding-heading h3 { margin: 1pt 0 3pt; }
+  .finding-sub { color: var(--muted); font-size: 8pt; }
+  .finding-score { flex: 0 0 24mm; text-align: right; }
+  .finding-score strong { display: block; font-size: 18pt; line-height: 1; }
+  .finding-score span { font-size: 7pt; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+  .finding-meta { display: grid; grid-template-columns: 30mm 1fr 30mm 1fr; gap: 3pt 6pt; font-size: 8.2pt; margin: 0 0 8pt; }
+  .finding-meta dt { color: var(--muted); }
+  .finding-meta dd { margin: 0; word-break: break-word; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; }
+  .small { font-size: 8pt; color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 8.2pt; }
+  .break { word-break: break-all; }
+  .toc { margin: 10pt 0; padding: 0; list-style: none; }
+  .toc li { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line); padding: 5pt 0; }
+  .footer-note { margin-top: 18pt; padding-top: 8pt; border-top: 1px solid var(--line); color: var(--muted); font-size: 7.4pt; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .finding { page-break-inside: avoid; }
+    .page { page-break-before: always; }
+  }
+  @page { size: A4; margin: 16mm 14mm 16mm; }
+</style>
+</head>
+<body>
+{% set risk_class = {'CRÍTICO':'critical','ALTO':'high','MEDIO':'medium','BAJO':'low','INFORMATIVO':'info'}.get(risk, 'info') %}
+
+{# ── Cover ───────────────────────────────────────────────── #}
+<section class="cover">
+  <div class="cover-top">
+    <span>{{ company }} · {{ 'Informe de seguridad' if language == 'es' else 'Security report' }}</span>
+    <span class="cover-classification">{{ classification }}</span>
+  </div>
+  <div class="cover-brand">
+    <div class="cover-mark">M</div>
+    <div><strong>MarlonTheBug</strong><small>Offensive Security Platform</small></div>
+  </div>
+  <div class="cover-main">
+    <span class="kicker">{{ 'Auditoría de seguridad ofensiva' if language == 'es' else 'Offensive security assessment' }}</span>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">{{ client_name }}</p>
+  </div>
+  <div class="cover-meta">
+    <div><span>{{ 'Proyecto' if language == 'es' else 'Project' }}</span><strong>{{ workspace.name }}</strong></div>
+    <div><span>{{ 'Fecha' if language == 'es' else 'Date' }}</span><strong>{{ generated_at_text }}</strong></div>
+    <div><span>{{ 'Objetivos' if language == 'es' else 'Targets' }}</span><strong>{{ target_hosts|length }}</strong></div>
+    <div><span>{{ 'Versión' if language == 'es' else 'Version' }}</span><strong>MarlonTheBug 2.0</strong></div>
+  </div>
+  <div class="cover-risk">
+    <div><div class="cover-risk-label">{{ 'Nivel de riesgo global' if language == 'es' else 'Overall risk rating' }}</div><div class="cover-risk-value risk-{{ risk_class }}">{{ risk }}</div></div>
+    <div style="text-align:right"><div class="cover-risk-label">{{ 'Hallazgos' if language == 'es' else 'Findings' }}</div><div class="cover-risk-value" style="color:#e8eef7">{{ stats.total }}</div></div>
+    <div style="text-align:right"><div class="cover-risk-label">KEV</div><div class="cover-risk-value" style="color:#fecdd3">{{ stats.kev }}</div></div>
+  </div>
+  <div class="cover-footer">
+    <span>{{ 'Documento confidencial. Distribución limitada al cliente y al equipo auditor.' if language == 'es' else 'Confidential document. Distribution limited to the client and assessment team.' }}</span>
+    <span>{{ generated_at_text }}</span>
+  </div>
+</section>
+
+{# ── Executive summary ───────────────────────────────────── #}
+<section class="page">
+  <h2>{{ '1. Resumen ejecutivo' if language == 'es' else '1. Executive summary' }}</h2>
+  <p class="section-intro">
+    {% if language == 'es' %}
+    Se ha realizado una auditoría de seguridad sobre <strong>{{ target_hosts|length }} objetivo(s)</strong> del proyecto <strong>{{ workspace.name }}</strong>{% if client_name %} para <strong>{{ client_name }}</strong>{% endif %}. El análisis combinó reconocimiento, descubrimiento de superficie, detección de vulnerabilidades y validación de evidencia.
+    {% else %}
+    A security assessment was performed against <strong>{{ target_hosts|length }} target(s)</strong> in the <strong>{{ workspace.name }}</strong> project{% if client_name %} for <strong>{{ client_name }}</strong>{% endif %}. The assessment combined reconnaissance, attack-surface discovery, vulnerability detection and evidence validation.
+    {% endif %}
+  </p>
+
+  <div class="stat-row">
+    {% for severity in severity_order %}
+    <div class="stat-box"><strong class="risk-{{ severity }}">{{ stats.severity.get(severity, 0) }}</strong><span>{{ severity_labels.get(severity, severity) }}</span></div>
+    {% endfor %}
+  </div>
+
+  <div class="callout {% if risk in ['CRÍTICO', 'ALTO'] %}danger{% elif risk == 'MEDIO' %}warn{% endif %}">
+    <p><strong>{{ 'Nivel de riesgo global:' if language == 'es' else 'Overall risk rating:' }} {{ risk }}</strong></p>
+    <p>
+      {% if language == 'es' %}
+      El riesgo se calcula a partir de la severidad, el impacto y la evidencia disponible. {{ stats.kev }} hallazgo(s) están relacionados con vulnerabilidades incluidas en CISA KEV, lo que implica explotación activa conocida y prioridad de remediación inmediata.
+      {% else %}
+      Risk is derived from severity, impact and available evidence. {{ stats.kev }} finding(s) relate to vulnerabilities in CISA KEV, meaning known active exploitation and immediate remediation priority.
+      {% endif %}
+    </p>
+  </div>
+
+  <h3>{{ 'Hallazgos prioritarios' if language == 'es' else 'Priority findings' }}</h3>
+  {% if findings %}
+  <table>
+    <thead><tr><th>#</th><th>{{ 'Hallazgo' if language == 'es' else 'Finding' }}</th><th>{{ 'Severidad' if language == 'es' else 'Severity' }}</th><th>CVSS</th><th>{{ 'Objetivo' if language == 'es' else 'Target' }}</th></tr></thead>
+    <tbody>
+    {% for finding in findings[:8] %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ finding.title }}{% if finding.kev %} <span class="badge b-critical">KEV</span>{% endif %}</td>
+      <td><span class="badge b-{{ finding.severity }}">{{ severity_labels.get(finding.severity, finding.severity) }}</span></td>
+      <td class="mono">{{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}</td>
+      <td class="mono break">{{ finding.target_host }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="small">{{ 'No se identificaron hallazgos en el alcance analizado.' if language == 'es' else 'No findings were identified in the assessed scope.' }}</p>
+  {% endif %}
+
+  <h3>{{ 'Recomendaciones prioritarias' if language == 'es' else 'Priority recommendations' }}</h3>
+  <ol>
+    {% if stats.severity.get('critical', 0) or stats.severity.get('high', 0) %}
+    <li>{{ 'Remediar de inmediato los hallazgos críticos y altos, empezando por los marcados como KEV.' if language == 'es' else 'Immediately remediate critical and high findings, starting with KEV entries.' }}</li>
+    {% endif %}
+    <li>{{ 'Aplicar los parches y configuraciones de seguridad indicados en la sección técnica de este informe.' if language == 'es' else 'Apply the patches and security configurations described in the technical section.' }}</li>
+    <li>{{ 'Revisar el alcance expuesto a Internet y reducir la superficie de ataque no necesaria.' if language == 'es' else 'Review the Internet-exposed surface and remove unnecessary attack surface.' }}</li>
+    <li>{{ 'Programar una prueba de retest para verificar la eficacia de las correcciones.' if language == 'es' else 'Schedule a retest to verify the effectiveness of the fixes.' }}</li>
+  </ol>
+
+  <div class="footer-note">{{ classification }} · {{ company }} · {{ generated_at_text }}</div>
+</section>
+
+{# ── Scope & methodology ─────────────────────────────────── #}
+<section class="page">
+  <h2>{{ '2. Alcance y metodología' if language == 'es' else '2. Scope and methodology' }}</h2>
+  <h3>{{ 'Alcance' if language == 'es' else 'Scope' }}</h3>
+  <dl class="kv">
+    <dt>{{ 'Proyecto' if language == 'es' else 'Project' }}</dt><dd>{{ workspace.name }}</dd>
+    <dt>{{ 'Cliente' if language == 'es' else 'Client' }}</dt><dd>{{ client_name }}</dd>
+    <dt>{{ 'Objetivos' if language == 'es' else 'Targets' }}</dt><dd class="mono break">{{ target_hosts|join(', ') if target_hosts else '—' }}</dd>
+    <dt>{{ 'Análisis' if language == 'es' else 'Scan' }}</dt><dd>{{ scan.profile if scan else 'Proyecto completo' }}{% if scan %} · {{ scan.started_at or scan.created_at }}{% endif %}</dd>
+    <dt>{{ 'Fecha del informe' if language == 'es' else 'Report date' }}</dt><dd>{{ generated_at_text }}</dd>
+  </dl>
+
+  <h3>{{ 'Metodología' if language == 'es' else 'Methodology' }}</h3>
+  <p>
+    {% if language == 'es' %}
+    La evaluación siguió un enfoque de caja negra/gris según el alcance autorizado, estructurado en fases: reconocimiento pasivo y activo, enumeración de superficie, crawling, detección de vulnerabilidades, validación de evidencia y generación del informe. Las pruebas se ejecutaron con límites de velocidad y sin técnicas destructivas.
+    {% else %}
+    The assessment followed a black/grey-box approach within the authorized scope, structured in phases: passive and active reconnaissance, surface enumeration, crawling, vulnerability detection, evidence validation and reporting. Testing used rate limits and avoided destructive techniques.
+    {% endif %}
+  </p>
+  <table>
+    <thead><tr><th>{{ 'Fase' if language == 'es' else 'Phase' }}</th><th>{{ 'Actividad' if language == 'es' else 'Activity' }}</th></tr></thead>
+    <tbody>
+      <tr><td>{{ 'Reconocimiento' if language == 'es' else 'Reconnaissance' }}</td><td>{{ 'Subdominios, DNS, fingerprint de tecnologías, endpoints y secretos expuestos.' if language == 'es' else 'Subdomains, DNS, technology fingerprinting, endpoints and exposed secrets.' }}</td></tr>
+      <tr><td>{{ 'Análisis web' if language == 'es' else 'Web assessment' }}</td><td>{{ 'Inyección, XSS, SSRF, CSRF, path traversal, carga de ficheros, SSTI, RCE y lógica de negocio.' if language == 'es' else 'Injection, XSS, SSRF, CSRF, path traversal, file upload, SSTI, RCE and business logic.' }}</td></tr>
+      <tr><td>{{ 'API y acceso' if language == 'es' else 'API & access' }}</td><td>{{ 'JWT, OAuth/OIDC, BOLA/BFLA, mass assignment, GraphQL y control de acceso.' if language == 'es' else 'JWT, OAuth/OIDC, BOLA/BFLA, mass assignment, GraphQL and access control.' }}</td></tr>
+      <tr><td>{{ 'Validación' if language == 'es' else 'Validation' }}</td><td>{{ 'Repetición de pruebas, comparación con baseline y descarte de falsos positivos por catch-all.' if language == 'es' else 'Re-testing, baseline comparison and soft-404 false-positive rejection.' }}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <p><strong>{{ 'Limitaciones' if language == 'es' else 'Limitations' }}</strong></p>
+    <p>
+      {% if language == 'es' %}
+      Los resultados reflejan el estado del sistema durante la ventana de pruebas. No se garantiza la ausencia total de vulnerabilidades. Las pruebas autenticadas dependen de las credenciales proporcionadas y pueden no cubrir todos los roles.
+      {% else %}
+      Results reflect the system state during the testing window. The absence of vulnerabilities is not guaranteed. Authenticated testing depends on the credentials provided and may not cover every role.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="footer-note">{{ classification }} · {{ company }} · {{ generated_at_text }}</div>
+</section>
+
+{# ── Findings summary ────────────────────────────────────── #}
+<section class="page">
+  <h2>{{ '3. Resumen de hallazgos' if language == 'es' else '3. Findings summary' }}</h2>
+  <div class="two-col">
+    <div>
+      <h3>{{ 'Por severidad' if language == 'es' else 'By severity' }}</h3>
+      <table>
+        <thead><tr><th>{{ 'Severidad' if language == 'es' else 'Severity' }}</th><th>{{ 'Cantidad' if language == 'es' else 'Count' }}</th></tr></thead>
+        <tbody>
+        {% for severity in severity_order %}
+        <tr><td><span class="badge b-{{ severity }}">{{ severity_labels.get(severity, severity) }}</span></td><td>{{ stats.severity.get(severity, 0) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>{{ 'Por categoría' if language == 'es' else 'By category' }}</h3>
+      <table>
+        <thead><tr><th>{{ 'Categoría' if language == 'es' else 'Category' }}</th><th>{{ 'Cantidad' if language == 'es' else 'Count' }}</th></tr></thead>
+        <tbody>
+        {% for category, count in stats.categories.items() %}
+        <tr><td>{{ category_labels.get(category, category) }}</td><td>{{ count }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="small">{{ 'Sin datos' if language == 'es' else 'No data' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>{{ 'Plan de remediación' if language == 'es' else 'Remediation plan' }}</h3>
+  <table>
+    <thead><tr><th>{{ 'Prioridad' if language == 'es' else 'Priority' }}</th><th>{{ 'Hallazgo' if language == 'es' else 'Finding' }}</th><th>{{ 'Acción' if language == 'es' else 'Action' }}</th><th>{{ 'Plazo' if language == 'es' else 'Deadline' }}</th></tr></thead>
+    <tbody>
+    {% for finding in findings %}
+    {% if finding.severity in ['critical','high'] or finding.kev %}
+    <tr>
+      <td><span class="badge b-{{ finding.severity }}">{{ severity_labels.get(finding.severity, finding.severity) }}</span></td>
+      <td>{{ finding.title }}</td>
+      <td>{{ finding.remediation|truncate(220) if finding.remediation else ('Revisar y aplicar la recomendación técnica.' if language == 'es' else 'Review and apply the technical recommendation.') }}</td>
+      <td>{{ 'Inmediato' if finding.severity == 'critical' or finding.kev else ('30 días' if language == 'es' else '30 days') }}</td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer-note">{{ classification }} · {{ company }} · {{ generated_at_text }}</div>
+</section>
+
+{# ── Detailed findings ───────────────────────────────────── #}
+{% if template != 'executive' %}
+<section class="page">
+  <h2>{{ '4. Hallazgos técnicos' if language == 'es' else '4. Technical findings' }}</h2>
+  {% if not findings %}
+  <p class="small">{{ 'No se identificaron hallazgos técnicos.' if language == 'es' else 'No technical findings were identified.' }}</p>
+  {% endif %}
+  {% for finding in findings %}
+  <article class="finding">
+    <div class="finding-head">
+      <div class="finding-number">{{ loop.index }}</div>
+      <div class="finding-heading">
+        <h3>{{ finding.title }}</h3>
+        <div class="finding-sub">
+          <span class="badge b-{{ finding.severity }}">{{ severity_labels.get(finding.severity, finding.severity) }}</span>
+          {% if finding.kev %}<span class="badge b-critical">KEV</span>{% endif %}
+          {% if finding.verified %}<span class="badge b-low">{{ 'Verificado' if language == 'es' else 'Verified' }}</span>{% endif %}
+          <span class="mono">{{ finding.plugin_name }}</span>
+        </div>
+      </div>
+      <div class="finding-score"><strong class="risk-{{ finding.severity }}">{{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}</strong><span>CVSS</span></div>
+    </div>
+    <dl class="finding-meta">
+      <dt>{{ 'Objetivo' if language == 'es' else 'Target' }}</dt><dd class="mono break">{{ finding.target_host }}</dd>
+      <dt>{{ 'Categoría' if language == 'es' else 'Category' }}</dt><dd>{{ category_labels.get(finding.category, finding.category) }}</dd>
+      <dt>{{ 'Endpoint' if language == 'es' else 'Endpoint' }}</dt><dd class="mono break">{{ finding.endpoint or '—' }}</dd>
+      <dt>{{ 'Confianza' if language == 'es' else 'Confidence' }}</dt><dd>{{ finding.confidence }}</dd>
+      <dt>CWE</dt><dd>{{ finding.cwe or '—' }}</dd>
+      <dt>OWASP</dt><dd>{{ finding.owasp or '—' }}</dd>
+      <dt>{{ 'Estado' if language == 'es' else 'Status' }}</dt><dd>{{ status_labels.get(finding.status, finding.status) }}</dd>
+      <dt>CVSS {{ 'vector' if language == 'es' else 'vector' }}</dt><dd class="mono break">{{ finding.cvss_vector or '—' }}</dd>
+    </dl>
+    <h4>{{ 'Descripción' if language == 'es' else 'Description' }}</h4>
+    <p>{{ finding.description }}</p>
+
+    {% if include_evidence and finding.evidence %}
+    <h4>{{ 'Evidencia' if language == 'es' else 'Evidence' }}</h4>
+    <pre>{{ finding.evidence|tojson(indent=2) }}</pre>
+    {% endif %}
+
+    {% if include_remediation and finding.remediation %}
+    <h4>{{ 'Remediación' if language == 'es' else 'Remediation' }}</h4>
+    <p>{{ finding.remediation }}</p>
+    {% endif %}
+
+    {% if include_waf_rules and finding.waf_rules %}
+    <h4>{{ 'Reglas WAF sugeridas' if language == 'es' else 'Suggested WAF rules' }}</h4>
+    {% for rule in finding.waf_rules %}<pre>{{ rule }}</pre>{% endfor %}
+    {% endif %}
+
+    {% if finding.references %}
+    <h4>{{ 'Referencias' if language == 'es' else 'References' }}</h4>
+    <ul>
+      {% for reference in finding.references %}
+      <li class="small break"><a href="{{ reference.url if reference is mapping else reference }}">{{ reference.url if reference is mapping else reference }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </article>
+  {% endfor %}
+  <div class="footer-note">{{ classification }} · {{ company }} · {{ generated_at_text }}</div>
+</section>
+{% endif %}
+
+{# ── Appendix ────────────────────────────────────────────── #}
+<section class="page">
+  <h2>{{ 'Anexo A. Escala de severidad y limitaciones' if language == 'es' else 'Appendix A. Severity scale and limitations' }}</h2>
+  <table>
+    <thead><tr><th>{{ 'Severidad' if language == 'es' else 'Severity' }}</th><th>CVSS</th><th>{{ 'Descripción' if language == 'es' else 'Description' }}</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-critical">{{ 'Crítica' if language == 'es' else 'Critical' }}</span></td><td>9.0 – 10.0</td><td>{{ 'Compromiso directo, explotación trivial o impacto masivo.' if language == 'es' else 'Direct compromise, trivial exploitation or massive impact.' }}</td></tr>
+      <tr><td><span class="badge b-high">{{ 'Alta' if language == 'es' else 'High' }}</span></td><td>7.0 – 8.9</td><td>{{ 'Impacto importante y explotación viable en el contexto del objetivo.' if language == 'es' else 'Significant impact and viable exploitation in the target context.' }}</td></tr>
+      <tr><td><span class="badge b-medium">{{ 'Media' if language == 'es' else 'Medium' }}</span></td><td>4.0 – 6.9</td><td>{{ 'Requiere condiciones específicas o impacto limitado.' if language == 'es' else 'Requires specific conditions or has limited impact.' }}</td></tr>
+      <tr><td><span class="badge b-low">{{ 'Baja' if language == 'es' else 'Low' }}</span></td><td>0.1 – 3.9</td><td>{{ 'Impacto menor o difícil explotación.' if language == 'es' else 'Minor impact or difficult exploitation.' }}</td></tr>
+      <tr><td><span class="badge b-info">{{ 'Informativa' if language == 'es' else 'Informational' }}</span></td><td>0.0</td><td>{{ 'Observación sin impacto directo demostrado.' if language == 'es' else 'Observation without demonstrated direct impact.' }}</td></tr>
+    </tbody>
+  </table>
+
+  <h3>{{ 'Glosario' if language == 'es' else 'Glossary' }}</h3>
+  <dl class="kv">
+    <dt>CVSS</dt><dd>Common Vulnerability Scoring System.</dd>
+    <dt>KEV</dt><dd>{{ 'Catálogo de vulnerabilidades explotadas activamente (CISA).' if language == 'es' else 'Known Exploited Vulnerabilities catalog (CISA).' }}</dd>
+    <dt>EPSS</dt><dd>{{ 'Probabilidad estimada de explotación en 30 días.' if language == 'es' else 'Estimated exploitation probability within 30 days.' }}</dd>
+    <dt>CWE</dt><dd>Common Weakness Enumeration.</dd>
+    <dt>OWASP</dt><dd>{{ 'Marco de referencia para riesgos de seguridad de aplicaciones.' if language == 'es' else 'Application security risk framework.' }}</dd>
+  </dl>
+
+  <h3>{{ 'Declaración' if language == 'es' else 'Statement' }}</h3>
+  <p class="small">
+    {% if language == 'es' %}
+    Este informe se ha generado para el cliente indicado y debe tratarse como confidencial. Las pruebas se realizaron exclusivamente sobre los sistemas incluidos en el alcance autorizado. La información aquí contenida no debe interpretarse como una garantía de seguridad absoluta.
+    {% else %}
+    This report was generated for the named client and must be treated as confidential. Testing was performed exclusively against systems within the authorized scope. The information herein must not be interpreted as a guarantee of absolute security.
+    {% endif %}
+  </p>
+
+  <div class="footer-note">MarlonTheBug 2.0 · {{ generated_at_text }} · {{ classification }}</div>
+</section>
+</body>
+</html>

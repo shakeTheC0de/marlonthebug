@@ -1,149 +1,231 @@
-"""SQLAlchemy async models for MarlonTheBug."""
+"""SQLAlchemy models — the persistent source of truth for the platform."""
+
+from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, func
-from sqlalchemy.dialects.sqlite import JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from marlonthebug.db.base import Base, str1024, str256, str8192, timestamp_now
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
-def _uuid() -> str:
+def new_id() -> str:
     return str(uuid.uuid4())
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class WorkspaceModel(Base):
     __tablename__ = "workspaces"
 
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    name: Mapped[str256]
-    description: Mapped[str1024] = mapped_column(default="")
-    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    client_name: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    scope: Mapped[dict] = mapped_column(JSON, default=dict)
     allow_exploitation: Mapped[bool] = mapped_column(Boolean, default=False)
     require_confirmation: Mapped[bool] = mapped_column(Boolean, default=True)
-    allowed_domains: Mapped[list] = mapped_column(JSON, default=list)
-    allowed_ip_ranges: Mapped[list] = mapped_column(JSON, default=list)
-    excluded_targets: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[timestamp_now]
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    targets: Mapped[list["TargetModel"]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+    targets: Mapped[list[TargetModel]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan", lazy="selectin"
+    )
+    scans: Mapped[list[ScanRunModel]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+    findings: Mapped[list[FindingModel]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
+    reports: Mapped[list[ReportModel]] = relationship(back_populates="workspace", cascade="all, delete-orphan")
 
 
 class TargetModel(Base):
     __tablename__ = "targets"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "host", name="uq_target_workspace_host"),
+        Index("ix_targets_workspace", "workspace_id"),
+    )
 
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True)
-    host: Mapped[str256]
-    type: Mapped[str256] = mapped_column(default="unknown")
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    host: Mapped[str] = mapped_column(String(255), index=True)
+    kind: Mapped[str] = mapped_column(String(40), default="web")
     technologies: Mapped[list] = mapped_column(JSON, default=list)
     ports: Mapped[list] = mapped_column(JSON, default=list)
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-    last_scanned: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[timestamp_now]
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-    )
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    workspace: Mapped["WorkspaceModel"] = relationship(back_populates="targets")
-    findings: Mapped[list["FindingModel"]] = relationship(back_populates="target", cascade="all, delete-orphan")
+    workspace: Mapped[WorkspaceModel] = relationship(back_populates="targets")
+    findings: Mapped[list[FindingModel]] = relationship(back_populates="target")
+    intel: Mapped[list[AssetIntelModel]] = relationship(back_populates="target", cascade="all, delete-orphan")
+
+
+class ScanRunModel(Base):
+    __tablename__ = "scan_runs"
+    __table_args__ = (Index("ix_scans_workspace_status", "workspace_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    profile: Mapped[str] = mapped_column(String(40), default="standard")
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    targets: Mapped[list] = mapped_column(JSON, default=list)
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    modules: Mapped[list] = mapped_column(JSON, default=list)
+    options: Mapped[dict] = mapped_column(JSON, default=dict)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    logs: Mapped[list] = mapped_column(JSON, default=list)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(120), default="panel")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    workspace: Mapped[WorkspaceModel] = relationship(back_populates="scans")
+    findings: Mapped[list[FindingModel]] = relationship(back_populates="scan_run")
+    reports: Mapped[list[ReportModel]] = relationship(back_populates="scan_run")
 
 
 class FindingModel(Base):
     __tablename__ = "findings"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "fingerprint", name="uq_finding_workspace_fingerprint"),
+        Index("ix_findings_workspace_severity", "workspace_id", "severity"),
+        Index("ix_findings_created", "created_at"),
+    )
 
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    target_id: Mapped[str] = mapped_column(ForeignKey("targets.id"), index=True)
-    plugin_name: Mapped[str256]
-    category: Mapped[str256] = mapped_column(default="web")
-    title: Mapped[str1024]
-    description: Mapped[str8192] = mapped_column(default="")
-    severity: Mapped[str256] = mapped_column(default="info")
-    cvss_score: Mapped[float] = mapped_column(default=0.0)
-    cvss_vector: Mapped[str1024] = mapped_column(default="")
-    endpoint: Mapped[str1024] = mapped_column(default="")
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    scan_run_id: Mapped[str | None] = mapped_column(ForeignKey("scan_runs.id", ondelete="SET NULL"), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(ForeignKey("targets.id", ondelete="SET NULL"), nullable=True)
+    plugin_name: Mapped[str] = mapped_column(String(120), default="")
+    category: Mapped[str] = mapped_column(String(60), default="web")
+    title: Mapped[str] = mapped_column(String(500))
+    description: Mapped[str] = mapped_column(Text, default="")
+    severity: Mapped[str] = mapped_column(String(20), default="info", index=True)
+    confidence: Mapped[str] = mapped_column(String(20), default="medium")
+    status: Mapped[str] = mapped_column(String(30), default="open", index=True)
+    cvss_score: Mapped[float] = mapped_column(Float, default=0.0)
+    cvss_vector: Mapped[str] = mapped_column(String(300), default="")
+    cwe: Mapped[str] = mapped_column(String(40), default="")
+    owasp: Mapped[str] = mapped_column(String(120), default="")
+    endpoint: Mapped[str] = mapped_column(String(2048), default="")
+    target_host: Mapped[str] = mapped_column(String(255), default="", index=True)
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
-    remediation: Mapped[str8192] = mapped_column(default="")
+    remediation: Mapped[str] = mapped_column(Text, default="")
     references: Mapped[list] = mapped_column(JSON, default=list)
     waf_rules: Mapped[list] = mapped_column(JSON, default=list)
-    exploited: Mapped[bool] = mapped_column(Boolean, default=False)
+    intel: Mapped[dict] = mapped_column(JSON, default=dict)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    fingerprint: Mapped[str] = mapped_column(String(64), index=True)
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    false_positive: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[timestamp_now]
+    kev: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    epss: Mapped[float] = mapped_column(Float, default=0.0)
+    occurrences: Mapped[list] = mapped_column(JSON, default=list)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    target: Mapped["TargetModel"] = relationship(back_populates="findings")
-    exploits: Mapped[list["ExploitModel"]] = relationship(back_populates="finding", cascade="all, delete-orphan")
-
-
-class ExploitModel(Base):
-    __tablename__ = "exploits"
-
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    finding_id: Mapped[str] = mapped_column(ForeignKey("findings.id"), index=True)
-    module_name: Mapped[str256]
-    payload_used: Mapped[str8192] = mapped_column(default="")
-    status: Mapped[str256] = mapped_column(default="pending")
-    output: Mapped[str8192] = mapped_column(default="")
-    error: Mapped[str8192] = mapped_column(default="")
-    timestamp: Mapped[timestamp_now]
-
-    finding: Mapped["FindingModel"] = relationship(back_populates="exploits")
-    sessions: Mapped[list["SessionModel"]] = relationship(back_populates="exploit", cascade="all, delete-orphan")
+    workspace: Mapped[WorkspaceModel] = relationship(back_populates="findings")
+    scan_run: Mapped[ScanRunModel | None] = relationship(back_populates="findings")
+    target: Mapped[TargetModel | None] = relationship(back_populates="findings")
 
 
-class ListenerModel(Base):
-    __tablename__ = "listeners"
+class ReportModel(Base):
+    __tablename__ = "reports"
 
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    type: Mapped[str256] = mapped_column(default="tcp")
-    host: Mapped[str256] = mapped_column(default="0.0.0.0")
-    port: Mapped[int] = mapped_column(Integer, default=4444)
-    payload_type: Mapped[str256] = mapped_column(default="")
-    status: Mapped[str256] = mapped_column(default="stopped")
-    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id"), nullable=True)
-    created_at: Mapped[timestamp_now]
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    scan_run_id: Mapped[str | None] = mapped_column(ForeignKey("scan_runs.id", ondelete="SET NULL"), nullable=True)
+    name: Mapped[str] = mapped_column(String(255))
+    format: Mapped[str] = mapped_column(String(20), default="pdf")
+    template: Mapped[str] = mapped_column(String(40), default="full")
+    language: Mapped[str] = mapped_column(String(10), default="es")
+    filename: Mapped[str] = mapped_column(String(255), default="")
+    path: Mapped[str] = mapped_column(String(2048), default="")
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="ready")
+    options: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    sessions: Mapped[list["SessionModel"]] = relationship(back_populates="listener", cascade="all, delete-orphan")
+    workspace: Mapped[WorkspaceModel] = relationship(back_populates="reports")
+    scan_run: Mapped[ScanRunModel | None] = relationship(back_populates="reports")
 
 
-class SessionModel(Base):
-    __tablename__ = "sessions"
+class AuditLogModel(Base):
+    __tablename__ = "audit_log"
 
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    target_id: Mapped[str | None] = mapped_column(ForeignKey("targets.id"), nullable=True)
-    exploit_id: Mapped[str | None] = mapped_column(ForeignKey("exploits.id"), nullable=True)
-    listener_id: Mapped[str | None] = mapped_column(ForeignKey("listeners.id"), nullable=True)
-    type: Mapped[str256] = mapped_column(default="shell")
-    user: Mapped[str256] = mapped_column(default="")
-    hostname: Mapped[str256] = mapped_column(default="")
-    platform: Mapped[str256] = mapped_column(default="")
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    connected_at: Mapped[timestamp_now]
-    disconnected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    action: Mapped[str] = mapped_column(String(120), index=True)
+    actor: Mapped[str] = mapped_column(String(120), default="local")
+    target: Mapped[str] = mapped_column(String(255), default="")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class IntelFeedModel(Base):
+    __tablename__ = "intel_feeds"
+
+    name: Mapped[str] = mapped_column(String(40), primary_key=True)
+    source: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(30), default="never")
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
     metadata_: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
-
-    exploit: Mapped["ExploitModel | None"] = relationship(back_populates="sessions")
-    listener: Mapped["ListenerModel | None"] = relationship(back_populates="sessions")
-    pivots: Mapped[list["PivotModel"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    last_sync: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class PivotModel(Base):
-    __tablename__ = "pivots"
+class CveModel(Base):
+    __tablename__ = "cves"
 
-    id: Mapped[str] = mapped_column(Text(36), primary_key=True, default=_uuid)
-    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), index=True)
-    type: Mapped[str256] = mapped_column(default="socks")
-    port: Mapped[int] = mapped_column(Integer, default=1080)
-    route_info: Mapped[dict] = mapped_column(JSON, default=dict)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[timestamp_now]
+    cve_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    title: Mapped[str] = mapped_column(String(500), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    cvss_score: Mapped[float] = mapped_column(Float, default=0.0)
+    cvss_vector: Mapped[str] = mapped_column(String(300), default="")
+    severity: Mapped[str] = mapped_column(String(20), default="unknown", index=True)
+    published: Mapped[str] = mapped_column(String(40), default="")
+    modified: Mapped[str] = mapped_column(String(40), default="")
+    kev: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    kev_due_date: Mapped[str] = mapped_column(String(40), default="")
+    epss: Mapped[float] = mapped_column(Float, default=0.0)
+    epss_percentile: Mapped[float] = mapped_column(Float, default=0.0)
+    cwe: Mapped[list] = mapped_column(JSON, default=list)
+    references: Mapped[list] = mapped_column(JSON, default=list)
+    affected: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[str] = mapped_column(String(40), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    session: Mapped["SessionModel"] = relationship(back_populates="pivots")
+
+class AssetIntelModel(Base):
+    __tablename__ = "asset_intel"
+    __table_args__ = (UniqueConstraint("target_id", "product", "version", "cve_id", name="uq_asset_intel"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    target_id: Mapped[str] = mapped_column(ForeignKey("targets.id", ondelete="CASCADE"))
+    product: Mapped[str] = mapped_column(String(120))
+    version: Mapped[str] = mapped_column(String(80), default="")
+    cve_id: Mapped[str] = mapped_column(String(32), default="")
+    match_type: Mapped[str] = mapped_column(String(40), default="version")
+    confidence: Mapped[str] = mapped_column(String(20), default="medium")
+    source: Mapped[str] = mapped_column(String(40), default="osv")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    target: Mapped[TargetModel] = relationship(back_populates="intel")

@@ -1,10 +1,9 @@
 """Orchestration engine — manages workspace lifecycle, plugin execution, and scan coordination."""
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from marlonthebug.core.events import EventBus
 from marlonthebug.core.pipeline import Pipeline, PipelineStage
@@ -12,7 +11,7 @@ from marlonthebug.core.scheduler import Scheduler
 from marlonthebug.core.workspace import WorkspaceManager
 
 if TYPE_CHECKING:
-    from marlonthebug.plugins.base import BasePlugin, Finding
+    from marlonthebug.plugins.base import BasePlugin
 
 logger = logging.getLogger("marlonthebug.engine")
 
@@ -49,7 +48,7 @@ class Engine:
             base_dir=workspaces_dir or Path("workspaces"),
             event_bus=self.event_bus,
         )
-        self._plugin_registry: dict[str, "BasePlugin"] = {}
+        self._plugin_registry: dict[str, BasePlugin] = {}
         self._running = False
 
         if auto_discover:
@@ -65,8 +64,8 @@ class Engine:
 
         registry = PluginRegistry()
         registry.discover()
-        for key, instance in registry._instances.items():
-            self._plugin_registry[key] = instance
+        for _key, instance in registry._instances.items():
+            self._plugin_registry[_key] = instance
         logger.info("Auto-discovered %d plugins", len(self._plugin_registry))
 
     def get_plugin(self, category: str, name: str) -> "BasePlugin | None":
@@ -77,7 +76,7 @@ class Engine:
 
     def list_plugins(self) -> dict[str, list[str]]:
         result: dict[str, list[str]] = {}
-        for key, plugin in self._plugin_registry.items():
+        for _key, plugin in self._plugin_registry.items():
             category = plugin.category
             if category not in result:
                 result[category] = []

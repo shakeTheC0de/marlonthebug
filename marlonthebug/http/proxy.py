@@ -3,7 +3,6 @@
 import logging
 import random
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger("marlonthebug.http.proxy")
 
@@ -59,8 +58,7 @@ class ProxyManager:
         if len(parts) == 2:
             return Proxy(type=default_type, host=parts[0], port=int(parts[1]))
         if len(parts) == 4:
-            return Proxy(type=default_type, host=parts[0], port=int(parts[1]),
-                         username=parts[2], password=parts[3])
+            return Proxy(type=default_type, host=parts[0], port=int(parts[1]), username=parts[2], password=parts[3])
         return None
 
     def next(self) -> Proxy | None:

@@ -1,7 +1,6 @@
 """HTTP session pool — per-target cookie jars and connection reuse."""
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -58,7 +57,7 @@ class SessionPool:
             del self._sessions[host]
 
     async def close_all(self) -> None:
-        for host, client in self._sessions.items():
+        for _host, client in self._sessions.items():
             await client.aclose()
         self._sessions.clear()
         if self._global_client:

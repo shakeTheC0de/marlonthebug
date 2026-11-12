@@ -1,14 +1,16 @@
 """Async event bus for inter-module communication."""
 
 import asyncio
+import contextlib
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Awaitable, Callable
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     TARGET_DISCOVERED = "target:discovered"
     TARGET_UPDATED = "target:updated"
     FINDING_CREATED = "finding:created"
@@ -35,7 +37,7 @@ class Event:
     type: EventType
     source: str
     data: dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 Handler = Callable[[Event], Awaitable[None]]
@@ -76,7 +78,7 @@ class EventBus:
                     "Error in event handler %s for %s", h.__name__, event.type.value
                 )
 
-        results = await asyncio.gather(*(handle(h) for h in handlers), return_exceptions=True)
+        await asyncio.gather(*(handle(h) for h in handlers), return_exceptions=True)
 
     async def start(self) -> None:
         self._running = True
@@ -86,17 +88,15 @@ class EventBus:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
 
     async def _processor(self) -> None:
         while self._running:
             try:
                 event = await asyncio.wait_for(self._queue.get(), timeout=0.5)
                 await self._dispatch(event)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break

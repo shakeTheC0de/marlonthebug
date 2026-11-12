@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 logger = logging.getLogger("marlonthebug.scheduler")
 
@@ -20,7 +21,7 @@ class Task:
 class TaskResult:
     task_id: str
     result: Any = None
-    error: Exception | None = None
+    error: BaseException | None = None
     success: bool = True
 
 
@@ -63,7 +64,7 @@ class Scheduler:
     async def wait_all(self) -> list[TaskResult]:
         if not self._tasks:
             return self.completed
-        results = await asyncio.gather(*self._tasks.values(), return_exceptions=True)
+        await asyncio.gather(*self._tasks.values(), return_exceptions=True)
         self.running = False
         return self.completed
 

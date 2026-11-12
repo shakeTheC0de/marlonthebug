@@ -1,19 +1,20 @@
 """Module pipeline — chains plugins stages: recon → audit → exploit."""
 
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace
     from marlonthebug.core.events import EventBus
-    from marlonthebug.plugins.base import BasePlugin, Finding
+    from marlonthebug.core.workspace import Workspace
+    from marlonthebug.plugins.base import BasePlugin
 
 logger = logging.getLogger("marlonthebug.pipeline")
 
 
-class PipelineStage(str, Enum):
+class PipelineStage(StrEnum):
     RECON = "recon"
     AUDIT = "audit"
     EXPLOIT = "exploit"
@@ -38,9 +39,7 @@ class Pipeline:
     ) -> None:
         self.workspace = workspace
         self.event_bus = event_bus
-        self.results: dict[PipelineStage, list[PipelineResult]] = {
-            stage: [] for stage in PipelineStage
-        }
+        self.results: dict[PipelineStage, list[PipelineResult]] = {stage: [] for stage in PipelineStage}
 
     async def run_stage(
         self,

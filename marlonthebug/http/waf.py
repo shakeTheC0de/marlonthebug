@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger("marlonthebug.http.waf")
 
@@ -136,9 +135,15 @@ class WAFFingerprinter:
 
     def is_waf_block(self, status_code: int, body: str) -> bool:
         block_indicators = [
-            "blocked", "access denied", "request rejected",
-            "forbidden", "not authorized", "captcha",
-            "security check", "challenge", "javascript required",
+            "blocked",
+            "access denied",
+            "request rejected",
+            "forbidden",
+            "not authorized",
+            "captcha",
+            "security check",
+            "challenge",
+            "javascript required",
         ]
         body_lower = body.lower()
         if status_code in (403, 401, 429, 503):
