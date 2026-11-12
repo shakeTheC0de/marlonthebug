@@ -1,26 +1,43 @@
-"""Git leaks detection — .git directory exposure and commit history scanning."""
+"""Git exposure detection with strict content validation.
+
+An HTTP 200 is not evidence of an exposed repository.  The plugin only reports
+when it can prove the response is a real Git object/configuration file and not
+a SPA catch-all page.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
-import zlib
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
-from marlonthebug.plugins.base import BasePlugin, Finding, Severity
+from marlonthebug.plugins.base import BasePlugin, Confidence, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo
 
 logger = logging.getLogger("marlonthebug.plugins.recon.git_leaks")
+
+GIT_HEAD_RE = re.compile(r"^(ref:\s+refs/[^\n]+|[0-9a-f]{40})\s*$", re.MULTILINE)
+GIT_CONFIG_RE = re.compile(r"\[core\]", re.IGNORECASE)
+GIT_LOG_RE = re.compile(r"^[0-9a-f]{40} [0-9a-f]{40} .+ <.+> \d+ [+-]\d{4}", re.MULTILINE)
+PACK_RE = re.compile(r"P pack-([0-9a-f]{40})\.pack")
+SECRET_PATTERNS = [
+    (r"(?i)AKIA[0-9A-Z]{16}", "AWS Access Key", Severity.HIGH, 8.0),
+    (r"(?i)gh[pousr]_[A-Za-z0-9_]{36,}", "GitHub Token", Severity.CRITICAL, 9.0),
+    (r"(?i)(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{24,}", "Stripe API Key", Severity.CRITICAL, 9.0),
+    (r"(?i)-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", "Private Key", Severity.CRITICAL, 9.5),
+    (r"(?i)(?:mongodb|postgres|mysql|redis)://[^\s\"'<>]+", "Database URI", Severity.CRITICAL, 9.0),
+    (r"(?i)(?:api[_-]?key|apikey|secret)\s*=\s*['\"]?([^\s'\"]{8,})", "API Key in config", Severity.HIGH, 7.5),
+]
 
 
 class GitLeakDetector(BasePlugin):
     name = "git_leaks"
-    version = "1.0.0"
-    description = "Detect exposed .git directories, extract repository metadata, and scan for secrets in git history"
+    version = "2.0.0"
+    description = "Detecta .git expuesto y extrae metadatos solo tras validar el contenido real"
     category = "recon"
 
     GIT_PATHS = [
@@ -28,7 +45,6 @@ class GitLeakDetector(BasePlugin):
         ".git/config",
         ".git/description",
         ".git/index",
-        ".git/COMMIT_EDITMSG",
         ".git/logs/HEAD",
         ".git/logs/refs/heads/master",
         ".git/logs/refs/heads/main",
@@ -38,146 +54,140 @@ class GitLeakDetector(BasePlugin):
         ".git/objects/info/packs",
     ]
 
-    SECRET_PATTERNS = [
-        (r"(?i)AKIA[0-9A-Z]{16}", "AWS Access Key", Severity.HIGH, 8.0),
-        (r"(?i)gh[pousr]_[A-Za-z0-9_]{36,}", "GitHub Token", Severity.CRITICAL, 9.0),
-        (r"(?i)(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{24,}", "Stripe API Key", Severity.CRITICAL, 9.0),
-        (r"(?i)-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", "Private Key", Severity.CRITICAL, 9.5),
-        (r"(?i)(?:password|passwd|pwd)\s*=\s*['\"]?([^\s'\"]{4,})['\"]?", "Password in config", Severity.HIGH, 7.5),
-        (r"(?i)(?:api[_-]?key|apikey|secret)\s*=\s*['\"]?([^\s'\"]{8,})['\"]?", "API Key in config", Severity.HIGH, 7.5),
-        (r"(?i)(?:mongodb|postgres|mysql|redis)://[^\s\"'<>]+", "Database URI", Severity.CRITICAL, 9.0),
-    ]
-
-    def __init__(self, options: dict | None = None) -> None:
-        super().__init__(options)
-        self._http: AsyncHTTPClient | None = None
-
-    async def setup(self, workspace: Workspace) -> None:
-        self._http = AsyncHTTPClient(timeout=10, retries=1)
-
-    async def teardown(self) -> None:
-        if self._http:
-            await self._http.close()
-            self._http = None
-
     async def run(
         self,
         target: TargetInfo,
         options: dict | None = None,
     ) -> AsyncIterator[Finding]:
-        if self._http is None:
-            return
-
-        exposed = await self._check_git_exposed(target.host)
-        if not exposed:
-            return
-
-        yield Finding(
-            plugin_name=self.name,
-            title=f".git directory exposed on {target.host}",
-            description=f"The .git directory is publicly accessible on {target.host}, potentially exposing source code and secrets.",
-            severity=Severity.CRITICAL,
-            cvss_score=9.0,
-            endpoint=f"https://{target.host}/.git/",
-            target_host=target.host,
-            category=self.category,
-            remediation="Block access to the .git directory in your web server configuration. Add 'deny all' for the .git location in nginx/Apache. Rotate all exposed secrets immediately.",
-            waf_rules=[
-                "# nginx: block .git access",
-                'location ~ /\\.git { deny all; return 403; }',
-                "# Apache: block .git access",
-                '<DirectoryMatch "^/.*/\\.git/">',
-                "    Require all denied",
-                "</DirectoryMatch>",
-            ],
-        )
-
-        async for finding in self._extract_info(target.host):
-            yield finding
-
-        if self.options.get("check_commits", False):
-            async for finding in self._scan_objects(target.host):
-                yield finding
-
-    async def _check_git_exposed(self, host: str) -> bool:
-        if self._http is None:
-            return False
-        for scheme in ["https", "http"]:
-            for path in self.GIT_PATHS[:3]:
-                try:
-                    response = await self._http.get(f"{scheme}://{host}/{path}")
-                    if response.status_code == 200:
-                        logger.info(".git exposed on %s (%s)", host, path)
-                        return True
-                except Exception:
-                    pass
-        return False
-
-    async def _extract_info(self, host: str) -> AsyncIterator[Finding]:
-        git_files = {}
-        if self._http is None:
-            return
-
-        for path in self.GIT_PATHS:
-            for scheme in ["https", "http"]:
-                try:
-                    response = await self._http.get(f"{scheme}://{host}/{path}")
-                    if response.status_code == 200:
-                        git_files[path] = response.body
-                        break
-                except Exception:
-                    pass
-
-        if ".git/config" in git_files:
-            content = git_files[".git/config"]
+        options = options or {}
+        base_url = str(options.get("base_url") or f"https://{target.host}").rstrip("/")
+        baseline = options.get("baseline")
+        http = AsyncHTTPClient(timeout=8, retries=1)
+        try:
+            head = await self._fetch_valid(http, f"{base_url}/.git/HEAD", GIT_HEAD_RE, baseline)
+            if not head:
+                return
             yield Finding(
                 plugin_name=self.name,
-                title=".git/config exposed",
-                description=f"Git repository configuration is exposed. Content:\n{content[:500]}",
-                severity=Severity.HIGH,
-                cvss_score=8.5,
-                endpoint=f"https://{host}/.git/config",
-                target_host=host,
+                title=f"Repositorio Git expuesto en {target.host}",
+                description=(
+                    "El directorio .git es accesible públicamente y el archivo HEAD contiene una "
+                    "referencia Git válida. Esto permite reconstruir código fuente, historial y secretos."
+                ),
+                severity=Severity.CRITICAL,
+                cvss_score=9.0,
+                confidence=Confidence.HIGH,
+                endpoint=f"{base_url}/.git/HEAD",
+                target_host=target.host,
                 category=self.category,
-                evidence={"file": ".git/config", "content": content[:500]},
-                remediation="Immediately remove .git/config accessibility. Rotate any exposed credentials.",
+                cwe="CWE-538",
+                owasp="A05:2021 Security Misconfiguration",
+                evidence={"validated": True, "head": head.body[:200]},
+                remediation=(
+                    "Bloquea el acceso a /.git en nginx/Apache, elimina el directorio del documento root "
+                    "y rota cualquier secreto que pueda haber estado expuesto."
+                ),
+                references=["https://owasp.org/www-community/attacks/Unvalidated_Redirects_and_Forwards_Cheat_Sheet"],
+                waf_rules=[
+                    "# nginx: bloquear .git",
+                    "location ~ /\\.git { deny all; return 403; }",
+                    "# Apache: bloquear .git",
+                    '<DirectoryMatch "^/.*/\\.git/">',
+                    "    Require all denied",
+                    "</DirectoryMatch>",
+                ],
             )
 
-            for pattern, name, sev, cvss in self.SECRET_PATTERNS:
-                for match in re.finditer(pattern, content):
-                    yield Finding(
-                        plugin_name=self.name,
-                        title=f"{name} in .git/config",
-                        description=f"{name} found in exposed git configuration.",
-                        severity=sev,
-                        cvss_score=cvss,
-                        endpoint=f"https://{host}/.git/config",
-                        target_host=host,
-                        category=self.category,
-                        evidence={"file": ".git/config", "match": match.group(0)[:100]},
-                        remediation=f"Rotate the {name.lower()} immediately.",
-                    )
-
-    async def _scan_objects(self, host: str) -> AsyncIterator[Finding]:
-        if self._http is None:
-            return
-        try:
-            response = await self._http.get(f"https://{host}/.git/objects/info/packs")
-            if response.status_code != 200:
-                return
-
-            pack_files = re.findall(r"pack-([a-f0-9]{40})\.pack", response.body)
-            for pack_hash in pack_files[:3]:
+            config = await self._fetch_valid(http, f"{base_url}/.git/config", GIT_CONFIG_RE, baseline)
+            if config:
                 yield Finding(
                     plugin_name=self.name,
-                    title=f"Git pack file exposed: pack-{pack_hash[:8]}.pack",
-                    description=f"A git pack file is exposed, which may contain full source code history.",
+                    title=".git/config expuesto",
+                    description="La configuración del repositorio Git es pública e incluye la sección [core].",
                     severity=Severity.HIGH,
-                    cvss_score=8.0,
-                    endpoint=f"https://{host}/.git/objects/pack/pack-{pack_hash}.pack",
+                    cvss_score=8.5,
+                    confidence=Confidence.HIGH,
+                    endpoint=f"{base_url}/.git/config",
+                    target_host=target.host,
+                    category=self.category,
+                    cwe="CWE-538",
+                    owasp="A05:2021 Security Misconfiguration",
+                    evidence={"file": ".git/config", "content": config.body[:1000]},
+                    remediation="Bloquea .git y rota cualquier credencial o URL interna expuesta en la configuración.",
+                )
+                async for secret in self._secrets(config.body, target.host, f"{base_url}/.git/config"):
+                    yield secret
+
+            logs = await self._fetch_valid(http, f"{base_url}/.git/logs/HEAD", GIT_LOG_RE, baseline)
+            if logs:
+                yield Finding(
+                    plugin_name=self.name,
+                    title="Historial de referencias Git expuesto",
+                    description="El archivo .git/logs/HEAD expone hashes y actividad del repositorio.",
+                    severity=Severity.MEDIUM,
+                    cvss_score=5.3,
+                    confidence=Confidence.HIGH,
+                    endpoint=f"{base_url}/.git/logs/HEAD",
+                    target_host=target.host,
+                    category=self.category,
+                    cwe="CWE-538",
+                    evidence={"lines": logs.body.splitlines()[:10]},
+                    remediation="Bloquea .git/ completo en el servidor web.",
+                )
+
+            if self.options.get("check_commits", False):
+                packs = await self._fetch_valid(http, f"{base_url}/.git/objects/info/packs", PACK_RE, baseline)
+                if packs:
+                    for pack_hash in PACK_RE.findall(packs.body)[:3]:
+                        yield Finding(
+                            plugin_name=self.name,
+                            title=f"Pack file de Git expuesto: {pack_hash[:8]}",
+                            description="Un pack file del repositorio es descargable y puede contener el historial completo.",
+                            severity=Severity.HIGH,
+                            cvss_score=8.0,
+                            confidence=Confidence.HIGH,
+                            endpoint=f"{base_url}/.git/objects/pack/pack-{pack_hash}.pack",
+                            target_host=target.host,
+                            category=self.category,
+                            evidence={"pack": f"pack-{pack_hash}.pack"},
+                            remediation="Bloquea .git y asume compromiso del código fuente.",
+                        )
+        finally:
+            await http.close()
+
+    async def _fetch_valid(self, http, url: str, pattern: re.Pattern, baseline):
+        try:
+            response = await http.get(url)
+        except Exception:
+            return None
+        if response.status_code != 200 or not response.body:
+            return None
+        if baseline and baseline.looks_like_app_shell(response):
+            return None
+        if not pattern.search(response.body):
+            return None
+        return response
+
+    async def _secrets(self, content: str, host: str, endpoint: str) -> AsyncIterator[Finding]:
+        seen: set[str] = set()
+        for pattern, name, severity, score in SECRET_PATTERNS:
+            for match in re.finditer(pattern, content):
+                value = match.group(0)
+                if value in seen:
+                    continue
+                seen.add(value)
+                yield Finding(
+                    plugin_name=self.name,
+                    title=f"{name} expuesto en .git/config",
+                    description=f"Se ha encontrado un {name} en la configuración pública del repositorio.",
+                    severity=severity,
+                    cvss_score=score,
+                    confidence=Confidence.HIGH,
+                    endpoint=endpoint,
                     target_host=host,
                     category=self.category,
-                    evidence={"pack_file": f"pack-{pack_hash}.pack"},
+                    cwe="CWE-798",
+                    owasp="A07:2021 Identification and Authentication Failures",
+                    evidence={"type": name, "match": value[:120]},
+                    remediation=f"Rota el {name.lower()} inmediatamente y elimina el secreto del historial.",
                 )
-        except Exception:
-            pass

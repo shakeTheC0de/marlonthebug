@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
-import re
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.file_upload")
 
@@ -51,11 +51,13 @@ class FileUploadAuditor(BasePlugin):
             for form in soup.find_all("form"):
                 file_inputs = form.find_all("input", type="file")
                 if file_inputs:
-                    upload_forms.append({
-                        "action": form.get("action", ""),
-                        "method": form.get("method", "GET").upper(),
-                        "enctype": form.get("enctype", ""),
-                    })
+                    upload_forms.append(
+                        {
+                            "action": form.get("action", ""),
+                            "method": form.get("method", "GET").upper(),
+                            "enctype": form.get("enctype", ""),
+                        }
+                    )
 
             if not upload_forms:
                 return
@@ -65,7 +67,7 @@ class FileUploadAuditor(BasePlugin):
                     plugin_name=self.name,
                     title="File upload form detected",
                     description=f"Found file upload form at {form_info['action']} (method: {form_info['method']})."
-                                " Verify that uploads are properly validated on the server side.",
+                    " Verify that uploads are properly validated on the server side.",
                     severity=Severity.MEDIUM,
                     cvss_score=5.3,
                     endpoint=f"{url}{form_info['action']}",

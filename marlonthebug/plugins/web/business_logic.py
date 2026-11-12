@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.business_logic")
 
@@ -18,7 +19,9 @@ logger = logging.getLogger("marlonthebug.plugins.web.business_logic")
 class BusinessLogicAuditor(BasePlugin):
     name = "business_logic"
     version = "1.0.0"
-    description = "Detect business logic vulnerabilities: workflow bypasses, parameter tampering, and state manipulation"
+    description = (
+        "Detect business logic vulnerabilities: workflow bypasses, parameter tampering, and state manipulation"
+    )
     category = "web"
 
     NEGATIVE_PRICE_INPUTS = [
@@ -53,7 +56,6 @@ class BusinessLogicAuditor(BasePlugin):
                 return
 
             body = resp.body
-            content_type = resp.headers.get("content-type", "")
 
             for pattern, label in self.WORKFLOW_PATTERNS:
                 matches = re.findall(pattern, body, re.IGNORECASE)
@@ -61,7 +63,7 @@ class BusinessLogicAuditor(BasePlugin):
                     yield self.create_finding(
                         title=f"Business logic indicator: {label}",
                         description=f"Found {label} pattern in response from {target.host}. "
-                                    "Multi-step workflows may be vulnerable to step-skipping attacks.",
+                        "Multi-step workflows may be vulnerable to step-skipping attacks.",
                         severity=Severity.LOW,
                         cvss_score=3.5,
                         endpoint=base_url,
@@ -76,8 +78,9 @@ class BusinessLogicAuditor(BasePlugin):
                         ),
                     )
 
+            from urllib.parse import urljoin
+
             from bs4 import BeautifulSoup
-            from urllib.parse import urljoin, urlparse, parse_qs
 
             soup = BeautifulSoup(body, "lxml")
             shop_forms = []
@@ -86,11 +89,13 @@ class BusinessLogicAuditor(BasePlugin):
                 action = urljoin(base_url, form.get("action", ""))
                 inputs = []
                 for inp in form.find_all("input"):
-                    inputs.append({
-                        "name": inp.get("name", ""),
-                        "type": inp.get("type", "text"),
-                        "value": inp.get("value", ""),
-                    })
+                    inputs.append(
+                        {
+                            "name": inp.get("name", ""),
+                            "type": inp.get("type", "text"),
+                            "value": inp.get("value", ""),
+                        }
+                    )
 
                 input_names = [i["name"] for i in inputs if i["name"]]
                 price_indicators = any(
@@ -106,7 +111,7 @@ class BusinessLogicAuditor(BasePlugin):
                     yield self.create_finding(
                         title=f"Price/quantity tampering surface found: {form['action']}",
                         description=f"Form at {form['action']} contains price-related fields ({', '.join(form['inputs'][:5])}). "
-                                    "These may be vulnerable to parameter tampering.",
+                        "These may be vulnerable to parameter tampering.",
                         severity=Severity.MEDIUM,
                         cvss_score=6.0,
                         endpoint=form["action"],

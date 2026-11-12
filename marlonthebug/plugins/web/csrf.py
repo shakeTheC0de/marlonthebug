@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -12,13 +13,20 @@ from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.csrf")
 
 CSRF_TOKEN_PATTERNS = [
-    "csrf", "xsrf", "token", "nonce", "_token", "csrf_token",
-    "__RequestVerificationToken", "authenticity_token", "_csrf",
+    "csrf",
+    "xsrf",
+    "token",
+    "nonce",
+    "_token",
+    "csrf_token",
+    "__RequestVerificationToken",
+    "authenticity_token",
+    "_csrf",
 ]
 
 
@@ -64,14 +72,13 @@ class CSIRAuditor(BasePlugin):
 
                 hidden_fields = [inp.get("name", "") for inp in inputs if inp.get("type", "") == "hidden"]
                 has_hidden_unique = any(
-                    any(pattern in (h or "").lower() for pattern in CSRF_TOKEN_PATTERNS)
-                    for h in hidden_fields
+                    any(pattern in (h or "").lower() for pattern in CSRF_TOKEN_PATTERNS) for h in hidden_fields
                 )
 
                 if not has_csrf and not has_hidden_unique and method != "GET":
                     insecure_forms += 1
                     yield self.create_finding(
-                        title=f"Missing CSRF protection in form",
+                        title="Missing CSRF protection in form",
                         description=f"Form at {action} (method: {method}) does not appear to have CSRF token protection.",
                         severity=Severity.MEDIUM,
                         cvss_score=5.3,

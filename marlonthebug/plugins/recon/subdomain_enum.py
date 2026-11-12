@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 import httpx
 from dns.asyncresolver import resolve as dns_resolve
@@ -14,7 +14,7 @@ from dns.resolver import NXDOMAIN, NoAnswer, NoNameservers
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.recon.subdomain_enum")
 
@@ -39,9 +39,33 @@ class SubdomainEnumerator(BasePlugin):
 
         wordlist_name = self.options.get("wordlist", "small")
         if wordlist_name == "small":
-            self._wordlist = ["www", "mail", "ftp", "api", "dev", "staging", "admin", "blog", "shop",
-                              "vpn", "remote", "portal", "cdn", "m", "app", "docs", "status", "test",
-                              "demo", "auth", "sso", "secure", "support", "help", "wiki"]
+            self._wordlist = [
+                "www",
+                "mail",
+                "ftp",
+                "api",
+                "dev",
+                "staging",
+                "admin",
+                "blog",
+                "shop",
+                "vpn",
+                "remote",
+                "portal",
+                "cdn",
+                "m",
+                "app",
+                "docs",
+                "status",
+                "test",
+                "demo",
+                "auth",
+                "sso",
+                "secure",
+                "support",
+                "help",
+                "wiki",
+            ]
         else:
             self._wordlist = self._load_wordlist()
 
@@ -50,9 +74,10 @@ class SubdomainEnumerator(BasePlugin):
             path = self.options.get("wordlist_path")
             if path:
                 import os
+
                 if os.path.exists(path):
                     with open(path) as f:
-                        return [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                        return [line.strip() for line in f if line.strip() and not line.startswith("#")]
         except Exception:
             pass
         return ["www", "mail", "api", "dev", "staging", "admin"]
@@ -79,8 +104,8 @@ class SubdomainEnumerator(BasePlugin):
                     data = response.json()
                     for entry in data:
                         name = entry.get("name_value", "").lower()
-                        for sub in name.split("\n"):
-                            sub = sub.strip().lstrip("*.")
+                        for raw_sub in name.split("\n"):
+                            sub = raw_sub.strip().lstrip("*.")
                             if sub.endswith(f".{domain}") and sub not in self._found:
                                 self._found.add(sub)
                                 if self._workspace:
@@ -109,7 +134,6 @@ class SubdomainEnumerator(BasePlugin):
             try:
                 answers = await dns_resolve(full, "A")
                 if answers:
-                    ips = [str(a) for a in answers]
                     self._found.add(full)
                     return full
             except (NXDOMAIN, NoAnswer, NoNameservers):

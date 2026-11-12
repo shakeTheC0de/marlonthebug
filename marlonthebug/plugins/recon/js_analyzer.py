@@ -5,13 +5,14 @@ from __future__ import annotations
 import json as json_mod
 import logging
 import re
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.recon.js_analyzer")
 
@@ -75,11 +76,13 @@ class JSAnalyzer(BasePlugin):
 
             body = response.body
             from bs4 import BeautifulSoup
+
             soup = BeautifulSoup(body, "lxml")
             script_urls: list[str] = []
 
             for script in soup.find_all("script", src=True):
                 from urllib.parse import urljoin
+
                 script_urls.append(urljoin(f"{scheme}://{target.host}", script["src"]))
 
             async for finding in self._analyze_inline(body, target.host):

@@ -2,7 +2,6 @@
 
 import importlib
 import logging
-from typing import Type
 
 from marlonthebug.plugins.base import BasePlugin
 from marlonthebug.plugins.registry import PluginRegistry
@@ -29,11 +28,7 @@ class PluginLoader:
 
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, BasePlugin)
-                    and attr is not BasePlugin
-                ):
+                if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
                     plugins.append(attr)
 
             for plugin_class in plugins:
@@ -41,13 +36,9 @@ class PluginLoader:
 
             return plugins
         except ImportError as e:
-            raise PluginDependencyError(
-                f"Missing dependency for {module_path}: {e}"
-            ) from e
+            raise PluginDependencyError(f"Missing dependency for {module_path}: {e}") from e
         except Exception as e:
-            raise PluginLoadError(
-                f"Failed to load plugin from {module_path}: {e}"
-            ) from e
+            raise PluginLoadError(f"Failed to load plugin from {module_path}: {e}") from e
 
     def load_category(self, category: str) -> int:
         package_path = f"marlonthebug.plugins.{category}"

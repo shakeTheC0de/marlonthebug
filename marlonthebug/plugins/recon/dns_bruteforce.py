@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import random
 import string
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from dns.asyncresolver import resolve as dns_resolve
 from dns.resolver import NXDOMAIN, NoAnswer, NoNameservers
@@ -14,7 +14,7 @@ from dns.resolver import NXDOMAIN, NoAnswer, NoNameservers
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.recon.dns_bruteforce")
 
@@ -39,11 +39,48 @@ class DNSBruteForce(BasePlugin):
     def _load_wordlist(self) -> list[str]:
         wordlist_name = self.options.get("wordlist", "small")
         if wordlist_name == "small":
-            return ["www", "mail", "ftp", "api", "dev", "staging", "admin", "blog", "shop",
-                    "vpn", "remote", "portal", "cdn", "m", "app", "docs", "status", "test",
-                    "demo", "auth", "sso", "secure", "support", "help", "wiki", "mobile",
-                    "webmail", "pop", "smtp", "ns1", "ns2", "dns", "dns1", "monitor",
-                    "metrics", "prometheus", "grafana", "jenkins", "gitlab", "registry"]
+            return [
+                "www",
+                "mail",
+                "ftp",
+                "api",
+                "dev",
+                "staging",
+                "admin",
+                "blog",
+                "shop",
+                "vpn",
+                "remote",
+                "portal",
+                "cdn",
+                "m",
+                "app",
+                "docs",
+                "status",
+                "test",
+                "demo",
+                "auth",
+                "sso",
+                "secure",
+                "support",
+                "help",
+                "wiki",
+                "mobile",
+                "webmail",
+                "pop",
+                "smtp",
+                "ns1",
+                "ns2",
+                "dns",
+                "dns1",
+                "monitor",
+                "metrics",
+                "prometheus",
+                "grafana",
+                "jenkins",
+                "gitlab",
+                "registry",
+            ]
         return ["www", "mail", "api", "dev", "staging", "admin"]
 
     async def run(
@@ -53,7 +90,6 @@ class DNSBruteForce(BasePlugin):
     ) -> AsyncIterator[Finding]:
         domain = target.host
         record_types = self.options.get("record_types", ["A", "AAAA", "CNAME"])
-        threads = self.options.get("threads", 50)
 
         await self._detect_wildcard(domain)
 

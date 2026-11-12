@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
-from typing import TYPE_CHECKING, AsyncIterator
-from urllib.parse import urlparse, parse_qs
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.command_injection")
 
@@ -60,8 +60,9 @@ class CommandInjectionAuditor(BasePlugin):
             else:
                 return
 
-            from bs4 import BeautifulSoup
             from urllib.parse import urljoin
+
+            from bs4 import BeautifulSoup
 
             soup = BeautifulSoup(resp.body, "lxml")
             test_urls: set[str] = set()
@@ -104,6 +105,7 @@ class CommandInjectionAuditor(BasePlugin):
                         baseline = await http.get(baseline_url)
                     except Exception:
                         continue
+                    baseline_body = baseline.body
 
                     for payload in CMD_PAYLOADS[:3]:
                         test_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
@@ -114,17 +116,20 @@ class CommandInjectionAuditor(BasePlugin):
                         try:
                             response = await http.get(test_url)
                             for indicator in ["uid=", "gid=", "groups="]:
-                                if indicator in response.body:
+                                if indicator in response.body and indicator not in baseline_body:
                                     yield self.create_finding(
                                         title=f"Command Injection in '{param_name}' — output visible",
                                         description=f"OS command injection in parameter '{param_name}'. "
-                                                    f"Payload '{payload}' returned {indicator}.",
+                                        f"Payload '{payload}' returned {indicator}.",
                                         severity=Severity.CRITICAL,
                                         cvss_score=10.0,
                                         endpoint=url,
                                         target_host=target.host,
-                                        evidence={"parameter": param_name, "payload": payload,
-                                                   "response_snippet": response.body[:300]},
+                                        evidence={
+                                            "parameter": param_name,
+                                            "payload": payload,
+                                            "response_snippet": response.body[:300],
+                                        },
                                         remediation=(
                                             "1. Never pass user input to system commands\n"
                                             "2. Use library calls instead of shell commands\n"
@@ -151,12 +156,16 @@ class CommandInjectionAuditor(BasePlugin):
                                 yield self.create_finding(
                                     title=f"Command Injection in '{param_name}' — time-based (blind)",
                                     description=f"Blind time-based command injection in parameter '{param_name}'. "
-                                                f"Response took {elapsed:.1f}s with sleep payload.",
+                                    f"Response took {elapsed:.1f}s with sleep payload.",
                                     severity=Severity.CRITICAL,
                                     cvss_score=9.5,
                                     endpoint=url,
                                     target_host=target.host,
-                                    evidence={"parameter": param_name, "payload": time_payload, "response_time": elapsed},
+                                    evidence={
+                                        "parameter": param_name,
+                                        "payload": time_payload,
+                                        "response_time": elapsed,
+                                    },
                                 )
                         except Exception:
                             pass

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
-from urllib.parse import urljoin, urlparse, parse_qs
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -12,7 +13,7 @@ from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.ssrf")
 
@@ -27,12 +28,33 @@ SSRF_PAYLOADS = [
 ]
 
 AWS_METADATA_INDICATORS = [
-    "ami-id", "instance-id", "instance-type", "local-ipv4",
-    "public-ipv4", "security-groups", "iam/info",
+    "ami-id",
+    "instance-id",
+    "instance-type",
+    "local-ipv4",
+    "public-ipv4",
+    "security-groups",
+    "iam/info",
 ]
 
-URL_PARAM_NAMES = ["url", "redirect", "link", "src", "href", "proxy", "path", "uri", "goto",
-                   "target", "next", "continue", "return", "file", "fetch", "download"]
+URL_PARAM_NAMES = [
+    "url",
+    "redirect",
+    "link",
+    "src",
+    "href",
+    "proxy",
+    "path",
+    "uri",
+    "goto",
+    "target",
+    "next",
+    "continue",
+    "return",
+    "file",
+    "fetch",
+    "download",
+]
 
 
 class SSIRAuditor(BasePlugin):
@@ -63,9 +85,8 @@ class SSIRAuditor(BasePlugin):
             for a in soup.find_all("a", href=True):
                 href = urljoin(base_url, a["href"])
                 parsed = urlparse(href)
-                if parsed.netloc in (target.host, f"www.{target.host}"):
-                    if parsed.query:
-                        test_urls.add(href)
+                if parsed.netloc in (target.host, f"www.{target.host}") and parsed.query:
+                    test_urls.add(href)
 
             for form in soup.find_all("form"):
                 action = urljoin(base_url, form.get("action", ""))
@@ -105,7 +126,7 @@ class SSIRAuditor(BasePlugin):
                                     yield self.create_finding(
                                         title=f"SSRF to AWS Metadata in '{param_name}'",
                                         description=f"SSRF vulnerability allowing access to AWS EC2 metadata service "
-                                                    f"via parameter '{param_name}'. Response contains '{indicator}'.",
+                                        f"via parameter '{param_name}'. Response contains '{indicator}'.",
                                         severity=Severity.CRITICAL,
                                         cvss_score=9.8,
                                         endpoint=url,
@@ -134,8 +155,11 @@ class SSIRAuditor(BasePlugin):
                                     cvss_score=9.5,
                                     endpoint=url,
                                     target_host=target.host,
-                                    evidence={"parameter": param_name, "payload": payload,
-                                               "response_snippet": response.body[:200]},
+                                    evidence={
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "response_snippet": response.body[:200],
+                                    },
                                 )
                                 break
                         except Exception:

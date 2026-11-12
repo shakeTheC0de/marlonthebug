@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.rce")
 
@@ -32,11 +33,20 @@ RCE_INDICATORS = [
 ]
 
 RCE_TEST_ENDPOINTS = [
-    "/cgi-bin/", "/cgi-bin/status", "/cgi-bin/test.cgi",
-    "/invoker/JMXInvokerServlet", "/invoker/EJBInvokerServlet",
-    "/jmx-console/", "/web-console/", "/admin-console/",
-    "/struts/", "/struts2/", ".action", ".do",
-    "/api/v1/execute", "/api/v1/run",
+    "/cgi-bin/",
+    "/cgi-bin/status",
+    "/cgi-bin/test.cgi",
+    "/invoker/JMXInvokerServlet",
+    "/invoker/EJBInvokerServlet",
+    "/jmx-console/",
+    "/web-console/",
+    "/admin-console/",
+    "/struts/",
+    "/struts2/",
+    ".action",
+    ".do",
+    "/api/v1/execute",
+    "/api/v1/run",
     "/wp-admin/admin-ajax.php",
 ]
 
@@ -99,7 +109,11 @@ class RCEAuditor(BasePlugin):
                                     cvss_score=9.5,
                                     endpoint=url,
                                     target_host=target.host,
-                                    evidence={"endpoint": endpoint, "vulnerability": vuln_name, "status": ep_resp.status_code},
+                                    evidence={
+                                        "endpoint": endpoint,
+                                        "vulnerability": vuln_name,
+                                        "status": ep_resp.status_code,
+                                    },
                                 )
                 except Exception:
                     pass

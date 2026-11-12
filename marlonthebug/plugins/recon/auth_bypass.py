@@ -5,13 +5,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
+from marlonthebug.plugins.recon.endpoint_discovery import _content_is_valid
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.recon.auth_bypass")
 
@@ -197,17 +199,15 @@ class AuthBypassPlugin(BasePlugin):
             except Exception:
                 pass
 
-    async def _test_header_bypass(
-        self, http: AsyncHTTPClient, base_url: str, host: str
-    ) -> AsyncIterator[Finding]:
+    async def _test_header_bypass(self, http: AsyncHTTPClient, base_url: str, host: str) -> AsyncIterator[Finding]:
         for headers in HEADER_BYPASS_PAYLOADS:
             try:
                 resp = await http.get(base_url, headers=headers)
-                if resp.status_code == 200:
+                if resp.status_code == 200 and "login" not in resp.body[:1500].lower() and len(resp.body.strip()) > 50:
                     yield Finding(
                         plugin_name=self.name,
-                        title=f"Auth bypass via header: {list(headers.keys())[0]}",
-                        description=f"Authentication bypassed using header '{list(headers.keys())[0]}': {list(headers.values())[0]}.",
+                        title=f"Auth bypass via header: {next(iter(headers.keys()))}",
+                        description=f"Authentication bypassed using header '{next(iter(headers.keys()))}': {next(iter(headers.values()))}.",
                         severity=Severity.CRITICAL,
                         cvss_score=9.8,
                         endpoint=base_url,
@@ -225,9 +225,7 @@ class AuthBypassPlugin(BasePlugin):
             except Exception:
                 pass
 
-    async def _test_method_bypass(
-        self, http: AsyncHTTPClient, base_url: str, host: str
-    ) -> AsyncIterator[Finding]:
+    async def _test_method_bypass(self, http: AsyncHTTPClient, base_url: str, host: str) -> AsyncIterator[Finding]:
         for method in METHODS:
             try:
                 if method == "GET":
@@ -247,7 +245,7 @@ class AuthBypassPlugin(BasePlugin):
                 else:
                     continue
 
-                if resp.status_code not in (401, 403, 404):
+                if resp.status_code == 200 and "login" not in resp.body[:1500].lower() and len(resp.body.strip()) > 50:
                     yield Finding(
                         plugin_name=self.name,
                         title=f"Auth bypass via HTTP method: {method}",
@@ -264,17 +262,13 @@ class AuthBypassPlugin(BasePlugin):
             except Exception:
                 pass
 
-    async def _test_public_paths(
-        self, http: AsyncHTTPClient, base_url: str, host: str
-    ) -> AsyncIterator[Finding]:
+    async def _test_public_paths(self, http: AsyncHTTPClient, base_url: str, host: str) -> AsyncIterator[Finding]:
         found_public = []
         for path in PUBLIC_PATHS:
             try:
                 url = f"{base_url}{path}"
-                resp = await http.head(url)
-                if resp.status_code == 200:
-                    found_public.append({"path": path, "status": resp.status_code})
-                elif resp.status_code not in (401, 404):
+                resp = await http.get(url)
+                if resp.status_code == 200 and _content_is_valid(path.lstrip("/"), resp.body, resp.content_type):
                     found_public.append({"path": path, "status": resp.status_code})
             except Exception:
                 pass
@@ -285,49 +279,66 @@ class AuthBypassPlugin(BasePlugin):
                     plugin_name=self.name,
                     title=f"Publicly accessible path: {item['path']} ({item['status']})",
                     description=f"Path {item['path']} is accessible without authentication.",
-                    severity=Severity.LOW,
-                    cvss_score=2.0,
+                    severity=Severity.INFO,
+                    cvss_score=0.0,
                     endpoint=f"{base_url}{item['path']}",
                     target_host=host,
                     category=self.category,
                     evidence=item,
                 )
 
-    async def _test_specific_endpoints(
-        self, http: AsyncHTTPClient, base_url: str, host: str
-    ) -> AsyncIterator[Finding]:
+    async def _test_specific_endpoints(self, http: AsyncHTTPClient, base_url: str, host: str) -> AsyncIterator[Finding]:
         sensitive = [
-            "/api/", "/graphql", "/swagger", "/docs",
-            "/.git/HEAD", "/.env", "/.git/config",
-            "/wp-json/", "/wp-json/wp/v2/users",
-            "/admin", "/login", "/dashboard",
-            "/phpinfo.php", "/info.php", "/server-status",
-            "/actuator", "/actuator/health", "/actuator/info", "/actuator/env",
-            "/metrics", "/prometheus",
+            "/api/",
+            "/graphql",
+            "/swagger",
+            "/docs",
+            "/.git/HEAD",
+            "/.env",
+            "/.git/config",
+            "/wp-json/",
+            "/wp-json/wp/v2/users",
+            "/admin",
+            "/login",
+            "/dashboard",
+            "/phpinfo.php",
+            "/info.php",
+            "/server-status",
+            "/actuator",
+            "/actuator/health",
+            "/actuator/info",
+            "/actuator/env",
+            "/metrics",
+            "/prometheus",
         ]
 
-        async def probe(path: str) -> tuple[str, int, str]:
+        async def probe(path: str) -> tuple[str, int, str, str]:
             url = f"{base_url}{path}"
             try:
-                r = await http.head(url)
-                return (path, r.status_code, r.headers.get("content-type", ""))
+                r = await http.get(url)
+                return (path, r.status_code, r.headers.get("content-type", ""), r.body)
             except Exception:
-                return (path, 0, "")
+                return (path, 0, "", "")
 
         results = await asyncio.gather(*(probe(p) for p in sensitive))
-        for path, status, ct in results:
-            if status not in (401, 404, 400, 0):
-                yield Finding(
-                    plugin_name=self.name,
-                    title=f"Sensitive endpoint without auth: {path} ({status})",
-                    description=f"Endpoint {path} returned HTTP {status} without requiring authentication.",
-                    severity=Severity.HIGH if status == 200 else Severity.MEDIUM,
-                    cvss_score=7.5 if status == 200 else 5.0,
-                    endpoint=f"{base_url}{path}",
-                    target_host=host,
-                    category=self.category,
-                    evidence={"path": path, "status": status, "content_type": ct},
-                )
+        for path, status, ct, body in results:
+            if status != 200:
+                continue
+            if "login" in body[:1500].lower():
+                continue
+            if not _content_is_valid(path.lstrip("/"), body, ct):
+                continue
+            yield Finding(
+                plugin_name=self.name,
+                title=f"Sensitive endpoint without auth: {path} ({status})",
+                description=f"Endpoint {path} returned HTTP {status} without requiring authentication.",
+                severity=Severity.HIGH,
+                cvss_score=7.5,
+                endpoint=f"{base_url}{path}",
+                target_host=host,
+                category=self.category,
+                evidence={"path": path, "status": status, "content_type": ct, "body_preview": body[:200]},
+            )
 
     async def _test_request_smuggling_auth_bypass(
         self, http: AsyncHTTPClient, base_url: str, host: str, scheme: str
@@ -340,12 +351,7 @@ class AuthBypassPlugin(BasePlugin):
         port = parsed.port or (443 if scheme == "https" else 80)
 
         try:
-            raw_payload = (
-                f"GET / HTTP/1.1\r\n"
-                f"Host: {host}\r\n"
-                f"Connection: keep-alive\r\n"
-                f"\r\n"
-            ).encode()
+            raw_payload = (f"GET / HTTP/1.1\r\nHost: {host}\r\nConnection: keep-alive\r\n\r\n").encode()
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
@@ -353,6 +359,7 @@ class AuthBypassPlugin(BasePlugin):
 
             if scheme == "https":
                 import ssl
+
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
@@ -368,7 +375,7 @@ class AuthBypassPlugin(BasePlugin):
                     if not chunk:
                         break
                     response += chunk
-                except socket.timeout:
+                except TimeoutError:
                     break
             elapsed = time.monotonic() - start
             sock.close()

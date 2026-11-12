@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+import socket
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.request_smuggling")
 
@@ -50,7 +52,6 @@ class RequestSmugglingAuditor(BasePlugin):
                 return
 
             try:
-                import socket
                 from urllib.parse import urlparse
 
                 parsed = urlparse(base_url)
@@ -82,7 +83,6 @@ class RequestSmugglingAuditor(BasePlugin):
             await http.close()
 
     async def _time_request(self, host: str, port: int, scheme: str) -> float:
-        import asyncio
         import time
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -91,6 +91,7 @@ class RequestSmugglingAuditor(BasePlugin):
 
         if scheme == "https":
             import ssl
+
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
@@ -109,7 +110,7 @@ class RequestSmugglingAuditor(BasePlugin):
                     if not chunk:
                         break
                     data += chunk
-                except socket.timeout:
+                except TimeoutError:
                     break
             elapsed = time.monotonic() - start
         finally:

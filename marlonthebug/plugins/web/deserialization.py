@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.deserialization")
 
@@ -36,7 +37,7 @@ YSO_PAYLOADS = [
     "rO0AB",  # Java serialized object header (base64)
     "aced0005",  # Java serialized stream magic bytes (hex)
     "Tzo0Oi",  # PHP serialized object "O:4:" (base64)
-    "O:4:\"User\"",  # PHP serialized object
+    'O:4:"User"',  # PHP serialized object
     "gASV",  # Python pickle proto 4 (base64)
 ]
 
@@ -63,8 +64,9 @@ class DeserializationAuditor(BasePlugin):
             else:
                 return
 
+            from urllib.parse import parse_qs, urljoin, urlparse
+
             from bs4 import BeautifulSoup
-            from urllib.parse import urljoin, urlparse, parse_qs
 
             soup = BeautifulSoup(resp.body, "lxml")
             test_urls: set[str] = set()
@@ -97,13 +99,16 @@ class DeserializationAuditor(BasePlugin):
                                     yield self.create_finding(
                                         title=f"Insecure Deserialization ({lang}) in '{param_name}'",
                                         description=f"Potential insecure deserialization vulnerability in "
-                                                    f"parameter '{param_name}'. {lang} deserialization error exposed.",
+                                        f"parameter '{param_name}'. {lang} deserialization error exposed.",
                                         severity=Severity.HIGH,
                                         cvss_score=8.5,
                                         endpoint=url,
                                         target_host=target.host,
-                                        evidence={"parameter": param_name, "language": lang,
-                                                   "error_snippet": response.body[:200]},
+                                        evidence={
+                                            "parameter": param_name,
+                                            "language": lang,
+                                            "error_snippet": response.body[:200],
+                                        },
                                         remediation=(
                                             "1. Never deserialize untrusted data\n"
                                             "2. Use safe serialization formats (JSON, Protocol Buffers)\n"

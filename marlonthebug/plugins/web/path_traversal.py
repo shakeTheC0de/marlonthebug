@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
-from urllib.parse import urlparse, parse_qs
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.path_traversal")
 
@@ -61,8 +62,9 @@ class PathTraversalAuditor(BasePlugin):
             else:
                 return
 
-            from bs4 import BeautifulSoup
             from urllib.parse import urljoin
+
+            from bs4 import BeautifulSoup
 
             soup = BeautifulSoup(resp.body, "lxml")
             test_urls: set[str] = set()
@@ -106,8 +108,12 @@ class PathTraversalAuditor(BasePlugin):
                                         cvss_score=9.0,
                                         endpoint=url,
                                         target_host=target.host,
-                                        evidence={"parameter": param_name, "payload": payload,
-                                                   "indicator": indicator, "response_snippet": response.body[:300]},
+                                        evidence={
+                                            "parameter": param_name,
+                                            "payload": payload,
+                                            "indicator": indicator,
+                                            "response_snippet": response.body[:300],
+                                        },
                                         remediation=(
                                             "1. Use chroot or containerization\n"
                                             "2. Resolve paths to canonical form and validate against allowlist\n"
@@ -127,8 +133,11 @@ class PathTraversalAuditor(BasePlugin):
                                         cvss_score=9.0,
                                         endpoint=url,
                                         target_host=target.host,
-                                        evidence={"parameter": param_name, "payload": payload,
-                                                   "response_snippet": response.body[:300]},
+                                        evidence={
+                                            "parameter": param_name,
+                                            "payload": payload,
+                                            "response_snippet": response.body[:300],
+                                        },
                                     )
                                     break
                         except Exception:

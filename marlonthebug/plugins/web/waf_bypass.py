@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.http.waf import WAFFingerprinter
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.waf_bypass")
 
@@ -48,8 +49,8 @@ class WAFBypassAuditor(BasePlugin):
                 yield self.create_finding(
                     title=f"WAF detected: {waf_result.name}",
                     description=f"Web Application Firewall ({waf_result.name}) detected on {target.host} "
-                                f"with confidence {waf_result.confidence:.0%}. "
-                                f"Evidence: {', '.join(waf_result.evidence[:3])}.",
+                    f"with confidence {waf_result.confidence:.0%}. "
+                    f"Evidence: {', '.join(waf_result.evidence[:3])}.",
                     severity=Severity.INFO,
                     cvss_score=0.0,
                     endpoint=base_url,

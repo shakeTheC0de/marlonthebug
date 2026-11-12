@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-import yaml
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from marlonthebug.plugins.base import Finding
@@ -27,10 +25,10 @@ class ReportGenerator:
         workspace_name: str = "",
         filename: str | None = None,
     ) -> Path:
-        filename = filename or f"{workspace_name}_report_{datetime.now(timezone.utc):%Y%m%d_%H%M%S}.json"
+        filename = filename or f"{workspace_name}_report_{datetime.now(UTC):%Y%m%d_%H%M%S}.json"
         filepath = self.output_dir / filename
         data = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "workspace": workspace_name,
             "total_findings": len(findings),
             "by_severity": self._count_by_severity(findings),
@@ -46,60 +44,60 @@ class ReportGenerator:
         workspace_name: str = "",
         filename: str | None = None,
     ) -> Path:
-        filename = filename or f"{workspace_name}_report_{datetime.now(timezone.utc):%Y%m%d_%H%M%S}.md"
+        filename = filename or f"{workspace_name}_report_{datetime.now(UTC):%Y%m%d_%H%M%S}.md"
         filepath = self.output_dir / filename
 
         lines: list[str] = []
-        lines.append(f"# MarlonTheBug — Security Audit Report")
-        lines.append(f"")
+        lines.append("# MarlonTheBug — Security Audit Report")
+        lines.append("")
         lines.append(f"**Workspace:** {workspace_name}")
-        lines.append(f"**Generated:** {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S} UTC")
+        lines.append(f"**Generated:** {datetime.now(UTC):%Y-%m-%d %H:%M:%S} UTC")
         lines.append(f"**Total Findings:** {len(findings)}")
-        lines.append(f"")
-        lines.append(f"## Executive Summary")
-        lines.append(f"")
+        lines.append("")
+        lines.append("## Executive Summary")
+        lines.append("")
         severity_counts = self._count_by_severity(findings)
         for sev in ["critical", "high", "medium", "low", "info"]:
             count = severity_counts.get(sev, 0)
             if count > 0:
                 lines.append(f"- **{sev.title()}:** {count}")
-        lines.append(f"")
-        lines.append(f"## Findings")
-        lines.append(f"")
+        lines.append("")
+        lines.append("## Findings")
+        lines.append("")
 
         for i, finding in enumerate(sorted(findings, key=lambda f: f.cvss_score, reverse=True)):
             lines.append(f"### {i + 1}. {finding.title}")
-            lines.append(f"")
-            lines.append(f"| Attribute | Value |")
-            lines.append(f"|-----------|-------|")
+            lines.append("")
+            lines.append("| Attribute | Value |")
+            lines.append("|-----------|-------|")
             lines.append(f"| **Severity** | {finding.severity.value.upper()} |")
             lines.append(f"| **CVSS Score** | {finding.cvss_score} |")
             lines.append(f"| **CVSS Vector** | {finding.cvss_vector} |")
             lines.append(f"| **Endpoint** | {finding.endpoint} |")
             lines.append(f"| **Target** | {finding.target_host} |")
             lines.append(f"| **Plugin** | {finding.plugin_name} |")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"**Description:** {finding.description}")
-            lines.append(f"")
+            lines.append("")
             if finding.evidence:
-                lines.append(f"**Evidence:**")
-                lines.append(f"```json")
+                lines.append("**Evidence:**")
+                lines.append("```json")
                 lines.append(json.dumps(finding.evidence, indent=2))
-                lines.append(f"```")
-                lines.append(f"")
+                lines.append("```")
+                lines.append("")
             if finding.remediation:
                 lines.append(f"**Remediation:** {finding.remediation}")
-                lines.append(f"")
+                lines.append("")
             if finding.references:
-                lines.append(f"**References:**")
+                lines.append("**References:**")
                 for ref in finding.references:
                     lines.append(f"- {ref}")
-                lines.append(f"")
+                lines.append("")
             if finding.waf_rules:
-                lines.append(f"**WAF Rules:**")
+                lines.append("**WAF Rules:**")
                 for rule in finding.waf_rules:
                     lines.append(f"```\n{rule}\n```")
-                lines.append(f"")
+                lines.append("")
 
         filepath.write_text("\n".join(lines))
         logger.info("Markdown report saved to %s", filepath)
@@ -117,13 +115,13 @@ class ReportGenerator:
             logger.warning("Jinja2 not available, falling back to markdown")
             return self.generate_markdown(findings, workspace_name, filename)
 
-        filename = filename or f"{workspace_name}_report_{datetime.now(timezone.utc):%Y%m%d_%H%M%S}.html"
+        filename = filename or f"{workspace_name}_report_{datetime.now(UTC):%Y%m%d_%H%M%S}.html"
         filepath = self.output_dir / filename
 
         template = Template(HTML_TEMPLATE)
         rendered = template.render(
             workspace=workspace_name,
-            generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            generated_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
             total=len(findings),
             severity_counts=self._count_by_severity(findings),
             findings=sorted(findings, key=lambda f: f.cvss_score, reverse=True),

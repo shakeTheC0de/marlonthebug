@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
-from urllib.parse import urlparse, parse_qs
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.lfi_rfi")
 
@@ -65,8 +67,9 @@ class LFIRFIAuditor(BasePlugin):
             else:
                 return
 
-            from bs4 import BeautifulSoup
             from urllib.parse import urljoin
+
+            from bs4 import BeautifulSoup
 
             soup = BeautifulSoup(resp.body, "lxml")
             test_urls: set[str] = set()
@@ -121,8 +124,11 @@ class LFIRFIAuditor(BasePlugin):
                                         cvss_score=9.5,
                                         endpoint=url,
                                         target_host=target.host,
-                                        evidence={"parameter": param_name, "payload": payload,
-                                                   "response_snippet": response.body[:300]},
+                                        evidence={
+                                            "parameter": param_name,
+                                            "payload": payload,
+                                            "response_snippet": response.body[:300],
+                                        },
                                         remediation=(
                                             "1. Use allowlist for file inclusion paths\n"
                                             "2. Disable allow_url_include in PHP\n"
@@ -135,6 +141,7 @@ class LFIRFIAuditor(BasePlugin):
 
                             if response.content_length > 100 and baseline.content_length < 50:
                                 import re as regex
+
                                 for pattern in PHP_ERRORS:
                                     if regex.search(pattern, response.body):
                                         yield self.create_finding(
@@ -144,8 +151,11 @@ class LFIRFIAuditor(BasePlugin):
                                             cvss_score=7.5,
                                             endpoint=url,
                                             target_host=target.host,
-                                            evidence={"parameter": param_name, "payload": payload,
-                                                       "error_snippet": response.body[:200]},
+                                            evidence={
+                                                "parameter": param_name,
+                                                "payload": payload,
+                                                "error_snippet": response.body[:200],
+                                            },
                                         )
                                         break
                         except Exception:
@@ -156,9 +166,7 @@ class LFIRFIAuditor(BasePlugin):
                         test_params[param_name] = rfi_payload
                         query_str = "&".join(f"{k}={v}" for k, v in test_params.items())
                         test_url = parsed._replace(query=query_str).geturl()
-                        try:
+                        with contextlib.suppress(Exception):
                             await http.get(test_url)
-                        except Exception:
-                            pass
         finally:
             await http.close()

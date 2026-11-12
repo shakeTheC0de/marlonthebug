@@ -3,7 +3,6 @@
 import importlib
 import logging
 import pkgutil
-from typing import Type
 
 from marlonthebug.plugins.base import BasePlugin
 
@@ -37,24 +36,22 @@ class PluginRegistry:
 
     def list_all(self) -> dict[str, list[dict]]:
         result: dict[str, list[dict]] = {}
-        for key, instance in self._instances.items():
+        for _key, instance in self._instances.items():
             category = instance.category
             if category not in result:
                 result[category] = []
-            result[category].append({
-                "name": instance.name,
-                "version": instance.version,
-                "description": instance.description,
-                "author": instance.author,
-            })
+            result[category].append(
+                {
+                    "name": instance.name,
+                    "version": instance.version,
+                    "description": instance.description,
+                    "author": instance.author,
+                }
+            )
         return result
 
     def get_by_category(self, category: str) -> list[BasePlugin]:
-        return [
-            instance
-            for key, instance in self._instances.items()
-            if instance.category == category
-        ]
+        return [instance for key, instance in self._instances.items() if instance.category == category]
 
     def discover(self, package_path: str = "marlonthebug.plugins") -> int:
         count = 0
@@ -86,11 +83,7 @@ class PluginRegistry:
             module = importlib.import_module(module_name)
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if (
-                    isinstance(attr, type)
-                    and issubclass(attr, BasePlugin)
-                    and attr is not BasePlugin
-                ):
+                if isinstance(attr, type) and issubclass(attr, BasePlugin) and attr is not BasePlugin:
                     self.register(attr)
                     count += 1
         except Exception as e:

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
-from urllib.parse import urlparse, parse_qs
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.ssti")
 
@@ -50,8 +51,9 @@ class SSTIAuditor(BasePlugin):
             else:
                 return
 
-            from bs4 import BeautifulSoup
             from urllib.parse import urljoin
+
+            from bs4 import BeautifulSoup
 
             soup = BeautifulSoup(resp.body, "lxml")
             test_urls: set[str] = set()
@@ -81,8 +83,6 @@ class SSTIAuditor(BasePlugin):
                     continue
 
                 for param_name in list(params.keys())[:10]:
-                    param_lower = param_name.lower()
-
                     for payload, expected_result in SSTI_PAYLOADS:
                         test_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
                         test_params[param_name] = payload
@@ -95,13 +95,17 @@ class SSTIAuditor(BasePlugin):
                                 yield self.create_finding(
                                     title=f"SSTI in '{param_name}' — evaluates {{7*7}} = 49",
                                     description=f"Server-Side Template Injection in parameter '{param_name}'. "
-                                                f"Payload '{payload}' evaluated to '{expected_result}'.",
+                                    f"Payload '{payload}' evaluated to '{expected_result}'.",
                                     severity=Severity.CRITICAL,
                                     cvss_score=9.8,
                                     endpoint=url,
                                     target_host=target.host,
-                                    evidence={"parameter": param_name, "payload": payload,
-                                               "expected": expected_result, "match": True},
+                                    evidence={
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "expected": expected_result,
+                                        "match": True,
+                                    },
                                     remediation=(
                                         "1. Never pass user input directly to template render functions\n"
                                         "2. Use a logic-less template engine (Mustache, Handlebars)\n"

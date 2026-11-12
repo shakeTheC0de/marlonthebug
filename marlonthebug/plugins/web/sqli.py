@@ -1,182 +1,327 @@
-"""SQL Injection detection — error-based, boolean blind, time-based."""
+"""SQL injection detection with baseline comparison and repeated validation."""
 
 from __future__ import annotations
 
 import logging
 import re
+import statistics
 import time
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
+from bs4 import BeautifulSoup
+
+from marlonthebug.http.baseline import similarity
 from marlonthebug.http.client import AsyncHTTPClient
-from marlonthebug.plugins.base import BasePlugin, Finding, Severity
-from marlonthebug.fuzzer.generators import PayloadContext
+from marlonthebug.plugins.base import BasePlugin, Confidence, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo
 
 logger = logging.getLogger("marlonthebug.plugins.web.sqli")
 
-SQLI_ERROR_PAYLOADS = ["'", '"', "' OR '1'='1", "' OR 1=1--", "1' OR '1'='1", "1 AND 1=1", "1' AND '1'='1"]
-SQLI_BLIND_PAYLOADS = ["' AND 1=1--", "' AND 1=2--", "' OR 1=1--", "' OR 1=2--"]
-SQLI_TIME_PAYLOADS = ["' OR SLEEP(2)--", "'; WAITFOR DELAY '0:0:2'--", "' AND SLEEP(2)--"]
-
-DB_ERROR_PATTERNS = [
+ERROR_PATTERNS = [
     (r"(?i)SQL syntax.*MySQL", "MySQL"),
     (r"(?i)Warning.*mysql_.*", "MySQL"),
     (r"(?i)PostgreSQL.*ERROR", "PostgreSQL"),
     (r"(?i)Warning.*\Wpg_\S+", "PostgreSQL"),
     (r"(?i)Driver.*SQL[\-\s]*Server", "MSSQL"),
     (r"(?i)OLE DB.*SQL Server", "MSSQL"),
-    (r"(?i)ORA-[0-9][0-9][0-9][0-9]", "Oracle"),
-    (r"(?i)Oracle error", "Oracle"),
+    (r"(?i)ORA-[0-9]{4,5}", "Oracle"),
     (r"(?i)SQLite.*error", "SQLite"),
-    (r"(?i)Warning.*sqlite3", "SQLite"),
     (r"(?i)unclosed quotation mark", "Generic SQL"),
     (r"(?i)quoted string not properly terminated", "Generic SQL"),
-    (r'(?i)You have an error in your SQL', "MySQL"),
-    (r'(?i)Unclosed quotation mark after', "MSSQL"),
+    (r"(?i)You have an error in your SQL", "MySQL"),
+]
+
+ERROR_PAYLOADS = ["'", '"', "' OR '1'='1", "1'", "1 AND 1=1"]
+BOOLEAN_PAIRS = [
+    ("' AND '1'='1", "' AND '1'='2"),
+    (" AND 1=1", " AND 1=2"),
+    ('" AND "1"="1', '" AND "1"="2'),
+]
+TIME_PAYLOADS = [
+    "' OR SLEEP(5)-- -",
+    "'; WAITFOR DELAY '0:0:5'--",
+    "' AND SLEEP(5)-- -",
 ]
 
 
 class SQLiAuditor(BasePlugin):
     name = "sqli"
-    version = "1.0.0"
-    description = "Detect SQL Injection vulnerabilities: error-based, boolean blind, time-based, and UNION-based"
+    version = "2.0.0"
+    description = "Detección de inyección SQL con baseline, repetición y validación temporal"
     category = "web"
-
-    async def setup(self, workspace: Workspace) -> None:
-        self._workspace = workspace
+    cwe = "CWE-89"
+    owasp = "A03:2021 Injection"
 
     async def run(self, target: TargetInfo, options: dict | None = None) -> AsyncIterator[Finding]:
-        http = AsyncHTTPClient(timeout=10, retries=1)
+        options = options or {}
+        base_url = str(options.get("base_url") or f"https://{target.host}").rstrip("/")
+        baseline = options.get("baseline")
+        endpoints = list(options.get("endpoints") or [])
+        http = AsyncHTTPClient()
+        reported: set[str] = set()
         try:
-            for scheme in ["https", "http"]:
-                try:
-                    resp = await http.get(f"{scheme}://{target.host}")
-                    base_url = f"{scheme}://{target.host}"
-                    break
-                except Exception:
-                    continue
-            else:
-                return
-
-            from bs4 import BeautifulSoup
-            from urllib.parse import urljoin, urlparse, parse_qs
-
-            soup = BeautifulSoup(resp.body, "lxml")
-            test_urls: set[str] = set()
-
-            for a in soup.find_all("a", href=True):
-                href = urljoin(base_url, a["href"])
-                parsed = urlparse(href)
-                if parsed.netloc == target.host.replace("www.", "").lstrip("www."):
-                    if parsed.query:
-                        test_urls.add(href)
-
-            for form in soup.find_all("form"):
-                action = urljoin(base_url, form.get("action", ""))
-                method = form.get("method", "GET").upper()
-                if method == "GET":
-                    inputs = [(inp.get("name", ""), inp.get("value", "")) for inp in form.find_all("input")]
-                    if inputs:
-                        params_str = "&".join(f"{n}={v or '1'}" for n, v in inputs if n)
-                        test_urls.add(f"{action}?{params_str}")
-
-            if not test_urls:
-                test_urls.add(base_url)
-
-            for url in list(test_urls)[:20]:
+            urls = await self._candidate_urls(http, base_url, endpoints)
+            for url in urls[:25]:
                 parsed = urlparse(url)
                 params = parse_qs(parsed.query)
                 if not params:
-                    append = f"{'&' if '?' in url else '?'}id=1"
-                    test_urls.add(url + append)
-                    params = {"id": ["1"]}
+                    continue
+                for param in list(params.keys())[:4]:
+                    if param in reported:
+                        continue
+                    try:
+                        original = params[param][0]
+                        base_response = await http.get(url)
+                        if baseline and baseline.looks_like_app_shell(base_response):
+                            continue
+                        # Measure normal variance to avoid dynamic-page false positives.
+                        second = await http.get(url)
+                        noise_delta = abs(base_response.content_length - second.content_length)
+                        noise_similarity = similarity(base_response.body, second.body)
 
-                for param_name in list(params.keys())[:5]:
-                    base_val = params.get(param_name, ["1"])[0]
+                        finding = await self._error_based(
+                            http, url, parsed, params, param, original, base_response, baseline, target
+                        )
+                        if finding:
+                            reported.add(param)
+                            yield finding
+                            continue
 
-                    for payload in SQLI_ERROR_PAYLOADS[:5]:
-                        try:
-                            test_params = {k: v[0] for k, v in params.items()}
-                            test_params[param_name] = payload
-                            test_url = parsed._replace(query="&".join(f"{k}={v}" for k, v in test_params.items())).geturl()
-                            response = await http.get(test_url)
+                        finding = await self._boolean_based(
+                            http,
+                            url,
+                            parsed,
+                            params,
+                            param,
+                            original,
+                            noise_delta,
+                            noise_similarity,
+                            baseline,
+                            target,
+                        )
+                        if finding:
+                            reported.add(param)
+                            yield finding
+                            continue
 
-                            for pattern, db_type in DB_ERROR_PATTERNS:
-                                if re.search(pattern, response.body):
-                                    yield self.create_finding(
-                                        title=f"SQL Injection (error-based) in {param_name} [{db_type}]",
-                                        description=f"Error-based SQL injection detected in parameter '{param_name}' "
-                                                    f"at {test_url}. Database appears to be {db_type}.",
-                                        severity=Severity.CRITICAL,
-                                        cvss_score=9.8,
-                                        endpoint=url,
-                                        target_host=target.host,
-                                        evidence={
-                                            "parameter": param_name,
-                                            "payload": payload,
-                                            "db_type": db_type,
-                                            "error_snippet": response.body[:300],
-                                        },
-                                        remediation=(
-                                            "1. Use parameterized queries (prepared statements)\n"
-                                            "2. Use an ORM with proper escaping\n"
-                                            "3. Apply input validation and sanitization\n"
-                                            "4. Implement least-privilege database accounts\n"
-                                            "5. Deploy a WAF with SQL injection rules"
-                                        ),
-                                        waf_rules=[
-                                            "SecRule REQUEST_COOKIES|REQUEST_FILENAME|ARGS \"(?i)(\\bselect\\b|\\bunion\\b|\\binsert\\b|\\bdrop\\b|\\bdelete\\b|\\bupdate\\b)\" \"id:1000,deny,status:403,msg:'SQL Injection attempt'\"",
-                                        ],
-                                    )
-                                    break
-
-                            if response.content_length < 10:
-                                continue
-
-                            for blind_test in SQLI_BLIND_PAYLOADS:
-                                test_params[param_name] = blind_test
-                                test_url2 = parsed._replace(query="&".join(f"{k}={v}" for k, v in test_params.items())).geturl()
-                                try:
-                                    r2 = await http.get(test_url2)
-                                    if r2.content_length != response.content_length:
-                                        yield self.create_finding(
-                                            title=f"Possible SQL Injection (boolean-based) in {param_name}",
-                                            description=f"Response length change ({response.content_length} vs {r2.content_length}) "
-                                                        f"when testing parameter '{param_name}'.",
-                                            severity=Severity.HIGH,
-                                            cvss_score=8.5,
-                                            endpoint=url,
-                                            target_host=target.host,
-                                            evidence={"parameter": param_name, "payload": blind_test,
-                                                       "response_1_len": response.content_length,
-                                                       "response_2_len": r2.content_length},
-                                        )
-                                        break
-                                except Exception:
-                                    pass
-
-                            for time_test in SQLI_TIME_PAYLOADS[:2]:
-                                start = time.monotonic()
-                                test_params[param_name] = time_test
-                                test_url_t = parsed._replace(query="&".join(f"{k}={v}" for k, v in test_params.items())).geturl()
-                                try:
-                                    await http.get(test_url_t)
-                                    elapsed = time.monotonic() - start
-                                    if elapsed > 2.0:
-                                        yield self.create_finding(
-                                            title=f"SQL Injection (time-based) in {param_name}",
-                                            description=f"Time-based SQL injection detected in parameter '{param_name}'. Response took {elapsed:.1f}s.",
-                                            severity=Severity.CRITICAL,
-                                            cvss_score=9.5,
-                                            endpoint=url,
-                                            target_host=target.host,
-                                            evidence={"parameter": param_name, "payload": time_test, "response_time": elapsed},
-                                        )
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
+                        finding = await self._time_based(http, url, parsed, params, param, original, baseline, target)
+                        if finding:
+                            reported.add(param)
+                            yield finding
+                    except Exception as exc:
+                        logger.debug("SQLi test failed for %s/%s: %s", url, param, exc)
         finally:
             await http.close()
+
+    async def _candidate_urls(self, http: AsyncHTTPClient, base_url: str, endpoints: list[str]) -> list[str]:
+        urls = [url for url in endpoints if "?" in url and "=" in url]
+        try:
+            home = await http.get(base_url)
+            soup = BeautifulSoup(home.body, "lxml")
+            for anchor in soup.find_all("a", href=True):
+                candidate = urljoin(base_url, anchor["href"])
+                if "?" in candidate and "=" in candidate and _same_host(candidate, base_url):
+                    urls.append(candidate)
+            for form in soup.find_all("form"):
+                if form.get("method", "get").lower() != "get":
+                    continue
+                action = urljoin(base_url, form.get("action", ""))
+                inputs = [item.get("name") for item in form.find_all("input") if item.get("name")]
+                if inputs:
+                    query = urlencode(dict.fromkeys(inputs, "1"))
+                    urls.append(f"{action}?{query}")
+        except Exception:
+            pass
+        deduped = []
+        seen = set()
+        for url in urls:
+            normalized = url.split("#")[0]
+            if normalized not in seen:
+                seen.add(normalized)
+                deduped.append(normalized)
+        return deduped
+
+    async def _error_based(self, http, url, parsed, params, param, original, base_response, baseline, target):
+        for payload in ERROR_PAYLOADS:
+            test_params = {key: values[0] for key, values in params.items()}
+            test_params[param] = f"{original}{payload}"
+            test_url = _replace_query(url, test_params)
+            try:
+                response = await http.get(test_url)
+            except Exception:
+                continue
+            if baseline and baseline.looks_like_app_shell(response):
+                continue
+            for pattern, db_type in ERROR_PATTERNS:
+                if re.search(pattern, response.body) and not re.search(pattern, base_response.body):
+                    return self.create_finding(
+                        title=f"Inyección SQL (error-based) en '{param}' [{db_type}]",
+                        description=(
+                            f"El parámetro '{param}' provoca un error del motor {db_type} al inyectar "
+                            f"un payload SQL. El error no aparecía en la respuesta baseline."
+                        ),
+                        severity=Severity.CRITICAL,
+                        cvss_score=9.8,
+                        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                        confidence=Confidence.HIGH,
+                        cwe="CWE-89",
+                        owasp="A03:2021 Injection",
+                        endpoint=url,
+                        target_host=target.host,
+                        evidence={
+                            "parameter": param,
+                            "payload": payload,
+                            "db_type": db_type,
+                            "url": test_url,
+                            "error_snippet": _snippet(response.body, pattern),
+                        },
+                        remediation=(
+                            "Usa consultas parametrizadas (prepared statements) y valida el tipo de dato. "
+                            "Aplica mínimo privilegio a la cuenta de base de datos y revisa los logs del motor."
+                        ),
+                        references=["https://owasp.org/Top10/A03_2021-Injection/"],
+                        waf_rules=[
+                            'SecRule ARGS "(?i)(\\bselect\\b|\\bunion\\b|\\bsleep\\b|\\bbenchmark\\b)" '
+                            "\"id:1001,deny,status:403,msg:'SQLi attempt'\"",
+                        ],
+                    )
+        return None
+
+    async def _boolean_based(
+        self, http, url, parsed, params, param, original, noise_delta, noise_similarity, baseline, target
+    ):
+        for true_payload, false_payload in BOOLEAN_PAIRS:
+            true_params = {key: values[0] for key, values in params.items()}
+            false_params = dict(true_params)
+            true_params[param] = f"{original}{true_payload}"
+            false_params[param] = f"{original}{false_payload}"
+            try:
+                true_response = await http.get(_replace_query(url, true_params))
+                false_response = await http.get(_replace_query(url, false_params))
+            except Exception:
+                continue
+            if baseline and (
+                baseline.looks_like_app_shell(true_response) or baseline.looks_like_app_shell(false_response)
+            ):
+                continue
+            delta = abs(true_response.content_length - false_response.content_length)
+            body_similarity = similarity(true_response.body, false_response.body)
+            significant = delta > max(40, noise_delta * 3) or body_similarity < max(0.9, noise_similarity - 0.12)
+            if not significant:
+                continue
+            # Confirm with a second pair to avoid transient dynamic content.
+            try:
+                confirm_true = await http.get(_replace_query(url, true_params))
+                confirm_false = await http.get(_replace_query(url, false_params))
+            except Exception:
+                continue
+            confirm_delta = abs(confirm_true.content_length - confirm_false.content_length)
+            if confirm_delta < max(30, noise_delta * 2):
+                continue
+            return self.create_finding(
+                title=f"Inyección SQL booleana en '{param}'",
+                description=(
+                    f"El parámetro '{param}' devuelve respuestas sistemáticamente distintas entre "
+                    f"condiciones verdaderas y falsas, con una variación superior al ruido del baseline."
+                ),
+                severity=Severity.HIGH,
+                cvss_score=8.6,
+                cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N",
+                confidence=Confidence.MEDIUM,
+                cwe="CWE-89",
+                owasp="A03:2021 Injection",
+                endpoint=url,
+                target_host=target.host,
+                evidence={
+                    "parameter": param,
+                    "true_payload": true_payload,
+                    "false_payload": false_payload,
+                    "delta": delta,
+                    "noise_delta": noise_delta,
+                    "similarity": round(body_similarity, 3),
+                    "confirmed": True,
+                },
+                remediation="Usa consultas parametrizadas y evita concatenar entrada del usuario en SQL.",
+                references=["https://owasp.org/Top10/A03_2021-Injection/"],
+            )
+        return None
+
+    async def _time_based(self, http, url, parsed, params, param, original, baseline, target):
+        timings = []
+        for _ in range(2):
+            try:
+                started = time.monotonic()
+                response = await http.get(url)
+                timings.append(time.monotonic() - started)
+                if baseline and baseline.looks_like_app_shell(response):
+                    return None
+            except Exception:
+                return None
+        average = statistics.mean(timings) if timings else 0.3
+        for payload in TIME_PAYLOADS:
+            test_params = {key: values[0] for key, values in params.items()}
+            test_params[param] = f"{original}{payload}"
+            test_url = _replace_query(url, test_params)
+            try:
+                started = time.monotonic()
+                await http.get(test_url)
+                elapsed = time.monotonic() - started
+            except Exception:
+                continue
+            if elapsed < average + 4.2:
+                continue
+            # Confirm the delay with a second request.
+            try:
+                started = time.monotonic()
+                await http.get(test_url)
+                confirm = time.monotonic() - started
+            except Exception:
+                continue
+            if confirm < average + 3.5:
+                continue
+            return self.create_finding(
+                title=f"Inyección SQL time-based en '{param}'",
+                description=(
+                    f"El parámetro '{param}' introduce un retraso reproducible de {confirm:.1f}s "
+                    f"frente a un baseline de {average:.2f}s."
+                ),
+                severity=Severity.CRITICAL,
+                cvss_score=9.1,
+                cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+                confidence=Confidence.HIGH,
+                cwe="CWE-89",
+                owasp="A03:2021 Injection",
+                endpoint=url,
+                target_host=target.host,
+                evidence={
+                    "parameter": param,
+                    "payload": payload,
+                    "baseline_seconds": round(average, 2),
+                    "delayed_seconds": round(confirm, 2),
+                    "confirmed": True,
+                },
+                remediation="Usa consultas parametrizadas y limita el tiempo de ejecución de las consultas.",
+                references=["https://owasp.org/Top10/A03_2021-Injection/"],
+            )
+        return None
+
+
+def _replace_query(url: str, params: dict[str, str]) -> str:
+    parsed = urlparse(url)
+    return urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
+
+
+def _same_host(candidate: str, base_url: str) -> bool:
+    return urlparse(candidate).netloc.lower() == urlparse(base_url).netloc.lower()
+
+
+def _snippet(body: str, pattern: str) -> str:
+    match = re.search(pattern, body)
+    if not match:
+        return body[:300]
+    start = max(0, match.start() - 80)
+    return body[start : match.end() + 160]

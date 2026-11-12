@@ -1,108 +1,210 @@
-"""Hidden endpoint discovery — directory and file brute forcing."""
+"""Hidden endpoint discovery with soft-404 and content validation."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
+import re
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
-from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 from marlonthebug.http.client import AsyncHTTPClient
+from marlonthebug.plugins.base import BasePlugin, Confidence, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.recon.endpoint_discovery")
 
-DEFAULT_EXTENSIONS = ["php", "asp", "aspx", "jsp", "do", "action", "html", "htm", "js", "json",
-                      "xml", "txt", "bak", "old", "swp", "sql", "zip", "tar", "gz", "log"]
+DEFAULT_EXTENSIONS = ["php", "asp", "aspx", "jsp", "html", "json", "xml", "txt", "bak", "old", "zip", "log"]
+
+# Paths that are interesting only when their content matches the expected
+# format.  This is what prevents SPA catch-all pages from becoming findings.
+CONTENT_CHECKS: dict[str, tuple[str, ...]] = {
+    ".git/HEAD": ("ref: refs/", "ref: refs/heads/"),
+    ".env": ("=", "APP_", "DB_", "SECRET", "KEY"),
+    ".env.local": ("=", "APP_", "DB_", "SECRET", "KEY"),
+    ".env.production": ("=", "APP_", "DB_", "SECRET", "KEY"),
+    ".env.backup": ("=", "APP_", "DB_", "SECRET", "KEY"),
+    "robots.txt": ("user-agent:", "disallow:", "sitemap:"),
+    "sitemap.xml": ("<urlset", "<sitemapindex"),
+    "security.txt": ("contact:", "expires:"),
+    "phpinfo.php": ("php version", "phpinfo()"),
+    "info.php": ("php version", "phpinfo()"),
+    "server-status": ("apache server status", "server status"),
+    "server-info": ("apache server information", "server information"),
+    "package.json": ('"name"', '"dependencies"', '"version"'),
+    "composer.json": ('"require"', '"name"', '"autoload"'),
+    "Dockerfile": ("from ", "run ", "cmd "),
+    ".DS_Store": ("bud1", "\x00\x00\x00\x01bud1"),
+}
 
 
 class EndpointDiscoverer(BasePlugin):
     name = "endpoint_discovery"
-    version = "1.0.0"
-    description = "Discover hidden endpoints via directory and file brute forcing with response analysis"
+    version = "2.0.0"
+    description = "Descubre endpoints ocultos con baseline, validación de contenido y control de falsos positivos"
     category = "recon"
+    beta = False
 
-    def __init__(self, options: dict | None = None) -> None:
-        super().__init__(options)
-        self._workspace: Workspace | None = None
-        self._wordlist: list[str] = []
+    WORDLIST = [
+        "admin",
+        "login",
+        "panel",
+        "dashboard",
+        "api",
+        "api/v1",
+        "api/v2",
+        "graphql",
+        "swagger",
+        "swagger-ui",
+        "docs",
+        "status",
+        "health",
+        "healthz",
+        "config",
+        "backup",
+        "backups",
+        "tmp",
+        "test",
+        "dev",
+        "staging",
+        "debug",
+        "phpinfo.php",
+        "info.php",
+        "server-status",
+        "server-info",
+        ".git/HEAD",
+        ".git/config",
+        ".env",
+        ".env.local",
+        ".env.production",
+        ".env.backup",
+        ".svn/entries",
+        ".hg/requires",
+        ".DS_Store",
+        "robots.txt",
+        "sitemap.xml",
+        "security.txt",
+        ".well-known/security.txt",
+        "upload",
+        "uploads",
+        "files",
+        "download",
+        "static",
+        "assets",
+        "wp-admin",
+        "wp-login.php",
+        "xmlrpc.php",
+        "wp-json/wp/v2/users",
+        "cgi-bin",
+        "vendor",
+        "composer.json",
+        "package.json",
+        "yarn.lock",
+        "Dockerfile",
+        "docker-compose.yml",
+        ".htaccess",
+        "web.config",
+    ]
 
     async def setup(self, workspace: Workspace) -> None:
         self._workspace = workspace
-        self._wordlist = self._load_wordlist()
-
-    def _load_wordlist(self) -> list[str]:
-        return [
-            "admin", "login", "wp-admin", "administrator", "panel", "dashboard",
-            "api", "v1", "v2", "graphql", "swagger", "docs", "status", "health",
-            "config", "backup", "backups", "tmp", "temp", "test", "dev", "staging",
-            "debug", "phpinfo", "info", "server-status", "console",
-            ".git", ".env", ".svn", ".hg", ".DS_Store",
-            "robots.txt", "sitemap.xml", "crossdomain.xml", "security.txt",
-            "upload", "uploads", "download", "files", "static", "assets",
-            "wp-content", "wp-includes", "wp-json", "wp-login", "xmlrpc.php",
-            "cgi-bin", "shell", "cmd",
-            "vendor", "composer.json", "package.json", "yarn.lock", "Dockerfile",
-        ]
 
     async def run(
         self,
         target: TargetInfo,
         options: dict | None = None,
     ) -> AsyncIterator[Finding]:
-        from urllib.parse import urljoin
-
-        extensions = self.options.get("extensions", DEFAULT_EXTENSIONS)
-        threads = self.options.get("threads", 30)
+        options = options or {}
+        base_url = str(options.get("base_url") or f"https://{target.host}").rstrip("/")
+        baseline = options.get("baseline")
         http = AsyncHTTPClient(timeout=8, retries=1)
-        semaphore = asyncio.Semaphore(threads)
+        semaphore = asyncio.Semaphore(8)
+        extensions = self.options.get("extensions", DEFAULT_EXTENSIONS)
+        seen: set[str] = set()
 
         async def check(path: str) -> Finding | None:
-            async with semaphore:
-                for scheme in ["https", "http"]:
-                    url = f"{scheme}://{target.host}/{path}"
-                    try:
-                        response = await http.head(url)
-                        if response.status_code not in (404, 400, 500):
-                            return Finding(
-                                plugin_name=self.name,
-                                title=f"Endpoint discovered: {url}",
-                                description=f"Found endpoint {url} returning HTTP {response.status_code}.",
-                                severity=Severity.INFO,
-                                cvss_score=0.0,
-                                endpoint=url,
-                                target_host=target.host,
-                                category=self.category,
-                                evidence={"url": url, "status_code": response.status_code},
-                            )
-                    except Exception:
-                        continue
+            path = path.lstrip("/")
+            if path in seen:
                 return None
+            seen.add(path)
+            async with semaphore:
+                url = f"{base_url}/{path}"
+                try:
+                    response = await http.get(url)
+                except Exception:
+                    return None
+                if response.status_code in (404, 410):
+                    return None
+                if baseline and baseline.looks_like_app_shell(response):
+                    return None
+                if response.status_code in (401, 403) and baseline and baseline.is_soft_404(response):
+                    return None
+                if not _content_is_valid(path, response.body, response.content_type):
+                    return None
+                snippet = re.sub(r"\s+", " ", response.body[:240]).strip()
+                return Finding(
+                    plugin_name=self.name,
+                    title=f"Endpoint descubierto: /{path}",
+                    description=(
+                        f"El endpoint {url} responde HTTP {response.status_code} con contenido "
+                        f"diferenciado del baseline y validación de formato correcta."
+                    ),
+                    severity=Severity.INFO,
+                    cvss_score=0.0,
+                    confidence=Confidence.HIGH,
+                    endpoint=url,
+                    target_host=target.host,
+                    category=self.category,
+                    evidence={
+                        "status_code": response.status_code,
+                        "content_type": response.content_type,
+                        "content_length": response.content_length,
+                        "snippet": snippet,
+                        "validated": True,
+                    },
+                    remediation="Revisa si el recurso debe ser público. Restringe el acceso si contiene información interna.",
+                    cwe="CWE-200",
+                    owasp="A01:2021 Broken Access Control",
+                )
 
-        priority_paths = [
-            ".git/HEAD", ".env", ".env.backup", ".env.production",
-            "robots.txt", "sitemap.xml", "admin", "login",
-            "wp-admin", "wp-login.php", "xmlrpc.php",
-            "phpmyadmin", "phpinfo.php", ".DS_Store",
-        ]
+        paths = list(dict.fromkeys(self.WORDLIST))
+        for item in ("admin", "login", "api", "backup", "config"):
+            for extension in extensions:
+                paths.append(f"{item}.{extension}")
 
-        for path in priority_paths:
-            result = await check(path)
-            if result:
-                yield result
-
-        tasks = [check(item) for item in self._wordlist]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in results:
-            if isinstance(r, Finding):
-                yield r
-
-        for item in self._wordlist[:20]:
-            for ext in extensions[:5]:
-                result = await check(f"{item}.{ext}")
+        tasks = [asyncio.create_task(check(path)) for path in paths]
+        try:
+            for task in asyncio.as_completed(tasks):
+                result = await task
                 if result:
                     yield result
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await http.close()
 
-        await http.close()
+
+def _content_is_valid(path: str, body: str, content_type: str) -> bool:
+    path = path.lower()
+    lowered = body.lower()
+    checks = {key.lower(): value for key, value in CONTENT_CHECKS.items()}
+    if path in checks:
+        return any(marker.lower() in lowered for marker in checks[path])
+    if path.endswith((".zip", ".tar", ".gz", ".bak", ".old")):
+        return "html" not in content_type and len(body) > 32
+    if path.endswith((".json",)):
+        return body.lstrip().startswith(("{", "["))
+    if path.endswith((".xml",)):
+        return body.lstrip().startswith("<") and "html" not in content_type
+    if path.endswith((".php", ".asp", ".aspx", ".jsp")):
+        # A dynamic endpoint must return something other than a blank shell.
+        return len(body.strip()) > 20 and "<html" not in body[:80].lower()
+    if path in {"admin", "login", "panel", "dashboard"}:
+        return len(body.strip()) > 20
+    return len(body.strip()) > 20 and "not found" not in lowered[:300]
+
+
+__all__ = ["CONTENT_CHECKS", "EndpointDiscoverer"]

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, AsyncIterator
-from urllib.parse import urlparse, parse_qs
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlparse
 
 from marlonthebug.http.client import AsyncHTTPClient
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import Workspace, TargetInfo
+    from marlonthebug.core.workspace import TargetInfo, Workspace
 
 logger = logging.getLogger("marlonthebug.plugins.web.open_redirect")
 
@@ -23,8 +24,21 @@ REDIRECT_PAYLOADS = [
     "https://target.com.evil.com",
 ]
 
-REDIRECT_PARAMS = ["url", "redirect", "link", "goto", "next", "continue", "return",
-                   "target", "referer", "redirect_uri", "redirect_url", "forward", "dest"]
+REDIRECT_PARAMS = [
+    "url",
+    "redirect",
+    "link",
+    "goto",
+    "next",
+    "continue",
+    "return",
+    "target",
+    "referer",
+    "redirect_uri",
+    "redirect_url",
+    "forward",
+    "dest",
+]
 
 
 class OpenRedirectAuditor(BasePlugin):
@@ -49,8 +63,9 @@ class OpenRedirectAuditor(BasePlugin):
             else:
                 return
 
-            from bs4 import BeautifulSoup
             from urllib.parse import urljoin
+
+            from bs4 import BeautifulSoup
 
             soup = BeautifulSoup(resp.body, "lxml")
             test_urls: set[str] = set()
@@ -58,9 +73,8 @@ class OpenRedirectAuditor(BasePlugin):
             for a in soup.find_all("a", href=True):
                 href = urljoin(base_url, a["href"])
                 parsed = urlparse(href)
-                if parsed.netloc in (target.host, f"www.{target.host}"):
-                    if parsed.query:
-                        test_urls.add(href)
+                if parsed.netloc in (target.host, f"www.{target.host}") and parsed.query:
+                    test_urls.add(href)
 
             for rp in REDIRECT_PARAMS:
                 test_urls.add(f"{base_url}?{rp}=https://example.com")
@@ -91,13 +105,16 @@ class OpenRedirectAuditor(BasePlugin):
                                 yield self.create_finding(
                                     title=f"Open Redirect in '{param_name}'",
                                     description=f"Open redirect vulnerability in parameter '{param_name}'. "
-                                                f"Redirects to external domain: {location}.",
+                                    f"Redirects to external domain: {location}.",
                                     severity=Severity.MEDIUM,
                                     cvss_score=6.1,
                                     endpoint=url,
                                     target_host=target.host,
-                                    evidence={"parameter": param_name, "payload": payload,
-                                               "redirect_location": location},
+                                    evidence={
+                                        "parameter": param_name,
+                                        "payload": payload,
+                                        "redirect_location": location,
+                                    },
                                     remediation=(
                                         "1. Use a allowlist of permitted redirect URLs\n"
                                         "2. Use relative paths or named routes\n"
@@ -118,8 +135,12 @@ class OpenRedirectAuditor(BasePlugin):
                                         cvss_score=5.5,
                                         endpoint=url,
                                         target_host=target.host,
-                                        evidence={"parameter": param_name, "payload": payload, "status": response.status_code,
-                                                   "location": location},
+                                        evidence={
+                                            "parameter": param_name,
+                                            "payload": payload,
+                                            "status": response.status_code,
+                                            "location": location,
+                                        },
                                     )
                                     break
                         except Exception:
