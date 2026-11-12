@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -211,6 +212,26 @@ def test_supply_chain_manifest_parser() -> None:
     )
     assert ("lodash", "4.17.20") in dependencies
     assert ("react", "18.2.0") in dependencies
+
+
+def test_panel_auth_and_csrf(app_paths: AppPaths) -> None:
+    settings = load_settings(app_paths)
+    settings.intel.auto_sync = False
+    app = create_app(app_paths, settings, auth_enabled=True)
+    with TestClient(app) as client:
+        assert client.get("/login").status_code == 200
+        token = app.state.auth.token
+        response = client.post("/login", data={"token": token, "next": "/"}, follow_redirects=False)
+        assert response.status_code == 303
+        page = client.get("/workspaces")
+        assert page.status_code == 200
+        match = re.search(r'name="csrf" value="([^"]+)"', page.text)
+        assert match
+        csrf = match.group(1)
+        created = client.post("/workspaces", data={"name": "auth-demo", "csrf": csrf}, follow_redirects=False)
+        assert created.status_code == 303
+        rejected = client.post("/workspaces", data={"name": "auth-demo-2"}, follow_redirects=False)
+        assert rejected.status_code == 403
 
 
 def test_panel_pages_render(app_paths: AppPaths) -> None:

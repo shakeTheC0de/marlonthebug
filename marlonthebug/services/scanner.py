@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -280,6 +282,9 @@ class ScanManager:
                     technologies=info.technologies,
                     metadata=info.metadata,
                 )
+                for discovered in sorted(context.discovered_hosts):
+                    if discovered != host:
+                        await self.repository.add_target(workspace.id, discovered)
 
             if context.should_stop.is_set():
                 status = "cancelled"
@@ -406,6 +411,14 @@ class ScanManager:
         host: str,
         finding: Finding,
     ) -> None:
+        kev = finding.kev
+        epss = finding.epss
+        payload_text = json.dumps(finding.to_dict(), ensure_ascii=False, default=str)
+        for cve_id in set(re.findall(r"CVE-\d{4}-\d{4,7}", payload_text, re.IGNORECASE)):
+            cached = await self.repository.get_cve(cve_id.upper())
+            if cached:
+                kev = kev or cached.kev
+                epss = max(epss, cached.epss)
         data = {
             "workspace_id": workspace_id,
             "scan_run_id": scan_id,
@@ -430,8 +443,8 @@ class ScanManager:
             "intel": finding.intel,
             "notes": finding.notes,
             "verified": finding.verified,
-            "kev": finding.kev,
-            "epss": finding.epss,
+            "kev": kev,
+            "epss": epss,
             "fingerprint": finding.fingerprint,
         }
         await self.repository.upsert_finding(data)

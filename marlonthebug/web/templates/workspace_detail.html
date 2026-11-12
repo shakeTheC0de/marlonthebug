@@ -23,6 +23,7 @@
       <label class="field">
         <span>Dominios permitidos (uno por línea o separados por coma)</span>
         <textarea name="allowed_domains" rows="3" placeholder="example.com&#10;*.example.com">{{ workspace.scope.get('allowed_domains', [])|join('\n') }}</textarea>
+        <small class="hint">Para enumerar subdominios, añade explícitamente el patrón <code>*.example.com</code> al alcance.</small>
       </label>
       <label class="field">
         <span>Rangos IP / CIDR permitidos</span>

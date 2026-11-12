@@ -87,7 +87,9 @@ class GitLeakDetector(BasePlugin):
                     "Bloquea el acceso a /.git en nginx/Apache, elimina el directorio del documento root "
                     "y rota cualquier secreto que pueda haber estado expuesto."
                 ),
-                references=["https://owasp.org/www-community/attacks/Unvalidated_Redirects_and_Forwards_Cheat_Sheet"],
+                references=[
+                    "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/02-Configuration_and_Deployment_Management_Testing/05-Review_Webserver_Metafiles_for_Information_Leakage"
+                ],
                 waf_rules=[
                     "# nginx: bloquear .git",
                     "location ~ /\\.git { deny all; return 403; }",

@@ -107,7 +107,11 @@ class SubdomainEnumerator(BasePlugin):
                         for raw_sub in name.split("\n"):
                             sub = raw_sub.strip().lstrip("*.")
                             if sub.endswith(f".{domain}") and sub not in self._found:
+                                if self._context and not self._context.scope.is_domain_allowed(sub):
+                                    continue
                                 self._found.add(sub)
+                                if self._context:
+                                    self._context.discovered_hosts.add(sub)
                                 if self._workspace:
                                     self._workspace.add_target(sub, type="web")
                                 yield Finding(
@@ -131,10 +135,14 @@ class SubdomainEnumerator(BasePlugin):
             full = f"{sub}.{domain}"
             if full in self._found:
                 return None
+            if self._context and not self._context.scope.is_domain_allowed(full):
+                return None
             try:
                 answers = await dns_resolve(full, "A")
                 if answers:
                     self._found.add(full)
+                    if self._context:
+                        self._context.discovered_hosts.add(full)
                     return full
             except (NXDOMAIN, NoAnswer, NoNameservers):
                 pass

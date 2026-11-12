@@ -87,7 +87,7 @@ marlonthebug config
 
 Flujo recomendado:
 
-1. Crea un **proyecto** y define el alcance autorizado.
+1. Crea un **proyecto** y define el alcance autorizado. Para enumerar subdominios añade el patrón `*.example.com`.
 2. Añade dominios o IPs como **activos**.
 3. Lanza un **análisis** con perfil seguro o estándar.
 4. Revisa y tria los **hallazgos** (confirmado, falso positivo, aceptado, remediado).
@@ -108,6 +108,7 @@ marlonthebug report generate --workspace acme-audit --format pdf --template full
 marlonthebug intel sync
 marlonthebug intel search CVE-2021-44228
 marlonthebug intel export --output intel-bundle.json
+marlonthebug legacy import --reports reports
 ```
 
 ### Perfiles de análisis

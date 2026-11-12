@@ -76,6 +76,7 @@ class ScanContext:
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     records: list[RequestRecord] = field(default_factory=list)
     should_stop: asyncio.Event = field(default_factory=asyncio.Event)
+    discovered_hosts: set[str] = field(default_factory=set)
 
     @property
     def scope_guard(self) -> ScopeGuard:

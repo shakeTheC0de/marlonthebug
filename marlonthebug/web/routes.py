@@ -378,11 +378,7 @@ async def create_scan(request: Request):
 async def scan_detail(request: Request, scan_id: str):
     scan = await get_scan_or_404(request, scan_id)
     repo = get_repo(request)
-    all_findings, _ = await repo.list_findings(
-        workspace_id=scan.workspace_id,
-        page_size=200,
-        sort="severity",
-    )
+    all_findings = await repo.list_all_findings(scan.workspace_id, limit=5000)
     findings = [
         finding for finding in all_findings if finding.scan_run_id == scan.id or scan.id in (finding.occurrences or [])
     ]
@@ -509,12 +505,7 @@ async def findings_page(request: Request):
 async def export_findings(request: Request):
     repo = get_repo(request)
     workspace_id = request.query_params.get("workspace") or None
-    findings, _ = await repo.list_findings(
-        workspace_id=workspace_id,
-        page=1,
-        page_size=200,
-        sort="severity",
-    )
+    findings = await repo.list_all_findings(workspace_id, limit=5000)
     output = io.StringIO()
     output.write("\ufeff")
     writer = csv.writer(output)
@@ -861,6 +852,8 @@ async def import_intel(request: Request, file: UploadFile = File(...)):
     form = await request.form()
     require_csrf(request, form)
     content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        return redirect_with("/intel", err="El bundle supera el límite de 50 MB")
     path = get_paths(request).feeds_dir / "imported-intel.json"
     path.write_bytes(content)
     try:

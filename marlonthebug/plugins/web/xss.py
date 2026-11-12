@@ -41,7 +41,7 @@ class XSSAuditor(BasePlugin):
         baseline = options.get("baseline")
         endpoints = list(options.get("endpoints") or [])
         http = AsyncHTTPClient()
-        reported: set[str] = set()
+        reported: set[tuple[str, str]] = set()
         try:
             urls = await self._candidate_urls(http, base_url, endpoints)
             for url in urls[:30]:
@@ -50,7 +50,7 @@ class XSSAuditor(BasePlugin):
                 if not params:
                     continue
                 for param in list(params.keys())[:5]:
-                    if param in reported:
+                    if (url, param) in reported:
                         continue
                     try:
                         base_response = await http.get(url)
@@ -63,6 +63,8 @@ class XSSAuditor(BasePlugin):
                             test_params[param] = payload
                             test_url = _replace_query(url, test_params)
                             response = await http.get(test_url)
+                            if not response.is_html:
+                                continue
                             if baseline and baseline.looks_like_app_shell(response):
                                 continue
                             if payload not in response.body:
@@ -74,7 +76,7 @@ class XSSAuditor(BasePlugin):
                                 continue
                             if similarity(base_response.body, response.body) > 0.995:
                                 continue
-                            reported.add(param)
+                            reported.add((url, param))
                             yield self.create_finding(
                                 title=f"XSS reflejado en el parámetro '{param}'",
                                 description=(

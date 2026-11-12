@@ -47,17 +47,17 @@ class PrototypePollutionAuditor(BasePlugin):
         endpoints = list(options.get("endpoints") or [])
         http = AsyncHTTPClient()
         try:
-            jinja_files = [url for url in endpoints if url.endswith(".js")][:12]
-            if not jinja_files:
+            js_files = [url for url in endpoints if url.endswith(".js")][:12]
+            if not js_files:
                 try:
                     home = await http.get(base_url)
-                    jinja_files = re.findall(
-                        r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', home.body, re.IGNORECASE
-                    )[:12]
+                    js_files = re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', home.body, re.IGNORECASE)[
+                        :12
+                    ]
                 except Exception:
-                    jinja_files = []
+                    js_files = []
             reported = set()
-            for raw_url in jinja_files:
+            for raw_url in js_files:
                 url = raw_url
                 if not url.startswith("http"):
                     from urllib.parse import urljoin

@@ -62,7 +62,7 @@ class SQLiAuditor(BasePlugin):
         baseline = options.get("baseline")
         endpoints = list(options.get("endpoints") or [])
         http = AsyncHTTPClient()
-        reported: set[str] = set()
+        reported: set[tuple[str, str]] = set()
         try:
             urls = await self._candidate_urls(http, base_url, endpoints)
             for url in urls[:25]:
@@ -71,7 +71,7 @@ class SQLiAuditor(BasePlugin):
                 if not params:
                     continue
                 for param in list(params.keys())[:4]:
-                    if param in reported:
+                    if (url, param) in reported:
                         continue
                     try:
                         original = params[param][0]
@@ -87,7 +87,7 @@ class SQLiAuditor(BasePlugin):
                             http, url, parsed, params, param, original, base_response, baseline, target
                         )
                         if finding:
-                            reported.add(param)
+                            reported.add((url, param))
                             yield finding
                             continue
 
@@ -104,13 +104,13 @@ class SQLiAuditor(BasePlugin):
                             target,
                         )
                         if finding:
-                            reported.add(param)
+                            reported.add((url, param))
                             yield finding
                             continue
 
                         finding = await self._time_based(http, url, parsed, params, param, original, baseline, target)
                         if finding:
-                            reported.add(param)
+                            reported.add((url, param))
                             yield finding
                     except Exception as exc:
                         logger.debug("SQLi test failed for %s/%s: %s", url, param, exc)

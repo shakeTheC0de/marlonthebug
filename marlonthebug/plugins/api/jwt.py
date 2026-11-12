@@ -88,6 +88,8 @@ class JWTAuditor(BasePlugin):
             return
         header = _decode(parts[0])
         payload = _decode(parts[1])
+        if not isinstance(payload, dict) or "alg" not in header:
+            return
         alg = str(header.get("alg", "")).lower()
         claims = {
             "header": header,

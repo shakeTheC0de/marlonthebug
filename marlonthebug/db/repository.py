@@ -478,6 +478,23 @@ class Repository:
             )
             return list(result.scalars().all())
 
+    async def list_all_findings(
+        self,
+        workspace_id: str | None = None,
+        limit: int = 5000,
+    ) -> list[FindingModel]:
+        async with self.db.session() as session:
+            statement = (
+                select(FindingModel)
+                .options(selectinload(FindingModel.target))
+                .order_by(SEVERITY_ORDER, FindingModel.cvss_score.desc())
+                .limit(max(1, min(limit, 20000)))
+            )
+            if workspace_id:
+                statement = statement.where(FindingModel.workspace_id == workspace_id)
+            result = await session.execute(statement)
+            return list(result.scalars().all())
+
     async def update_finding(self, finding_id: str, **fields: Any) -> FindingModel | None:
         allowed = {"status", "notes", "severity", "confidence", "verified", "kev", "epss", "intel"}
         async with self.db.session() as session:

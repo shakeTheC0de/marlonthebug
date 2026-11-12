@@ -90,6 +90,7 @@ marlonthebug workspace add --name acme --domains example.com
 marlonthebug scan run --workspace acme --categories recon,web --profile safe --authorized
 marlonthebug report generate --workspace acme --format pdf
 marlonthebug intel sync
+marlonthebug legacy import --reports reports
 ```
 
 ## 9. Datos y backup

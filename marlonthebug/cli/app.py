@@ -33,10 +33,12 @@ workspace_app = typer.Typer(help="Gestión de proyectos", no_args_is_help=True)
 scan_app = typer.Typer(help="Ejecución de análisis", no_args_is_help=True)
 report_app = typer.Typer(help="Generación de informes", no_args_is_help=True)
 intel_app = typer.Typer(help="Inteligencia de vulnerabilidades", no_args_is_help=True)
+legacy_app = typer.Typer(help="Importación de datos de versiones anteriores", no_args_is_help=True)
 cli.add_typer(workspace_app, name="workspace")
 cli.add_typer(scan_app, name="scan")
 cli.add_typer(report_app, name="report")
 cli.add_typer(intel_app, name="intel")
+cli.add_typer(legacy_app, name="legacy")
 
 console = Console()
 
@@ -538,6 +540,32 @@ def console_tui() -> None:
         console.print("[red]La TUI requiere instalar:[/red] uv sync --extra tui")
         raise typer.Exit(1) from None
     ConsoleApp().run()
+
+
+@legacy_app.command("import")
+def legacy_import(
+    reports: str = typer.Option("reports", "--reports", "-r", help="Directorio con informes JSON 1.x"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Importa informes JSON antiguos al panel 2.0."""
+    asyncio.run(_legacy_import(reports, data_dir))
+
+
+async def _legacy_import(reports: str, data_dir: str | None) -> None:
+    from marlonthebug.services.legacy import import_reports
+
+    paths = _paths(data_dir)
+    database, repository = await _repo(paths)
+    try:
+        stats = await import_reports(repository, Path(reports).expanduser())
+        console.print(
+            f"[green]Importación completada:[/green] "
+            f"{stats['reports']} informes, {stats['workspaces']} proyectos, {stats['findings']} hallazgos"
+        )
+        if stats["skipped"]:
+            console.print(f"[yellow]{stats['skipped']} archivos omitidos[/yellow]")
+    finally:
+        await database.close()
 
 
 @cli.command("config")

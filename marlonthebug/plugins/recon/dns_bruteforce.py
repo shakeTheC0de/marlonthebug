@@ -97,12 +97,16 @@ class DNSBruteForce(BasePlugin):
             full = f"{subdomain}.{domain}"
             if full in getattr(self, "_checked", set()):
                 continue
+            if self._context and not self._context.scope.is_domain_allowed(full):
+                continue
             for rtype in record_types:
                 try:
                     answers = await dns_resolve(full, rtype)
                     ips = {str(a) for a in answers}
                     if self._wildcard_ips and ips.issubset(self._wildcard_ips):
                         continue
+                    if self._context:
+                        self._context.discovered_hosts.add(full)
                     if self._workspace:
                         self._workspace.add_target(full, type="web")
                     yield Finding(

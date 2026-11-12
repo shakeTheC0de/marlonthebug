@@ -214,12 +214,7 @@ class ReportService:
         workspace_id: str,
         scan: ScanRunModel | None,
     ) -> list[FindingModel]:
-        findings, _ = await self.repository.list_findings(
-            workspace_id=workspace_id,
-            page=1,
-            page_size=200,
-            sort="severity",
-        )
+        findings = await self.repository.list_all_findings(workspace_id, limit=5000)
         if not scan:
             return findings
         selected = []

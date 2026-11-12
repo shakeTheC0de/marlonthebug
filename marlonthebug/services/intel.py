@@ -7,6 +7,7 @@ import gzip
 import io
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -45,7 +46,42 @@ class IntelService:
         results: dict[str, Any] = {}
         results["kev"] = await self.sync_kev()
         results["epss"] = await self.sync_epss()
+        results["enriched_findings"] = await self.enrich_findings()
         return results
+
+    async def enrich_findings(self, limit: int = 5000) -> int:
+        """Re-evaluate KEV/EPSS for findings that reference a CVE."""
+        from sqlalchemy import select
+
+        from marlonthebug.db.models import FindingModel
+
+        updated = 0
+        async with self.repository.db.session() as session:
+            result = await session.execute(select(FindingModel).limit(limit))
+            findings = list(result.scalars().all())
+        for finding in findings:
+            text = " ".join(
+                [
+                    finding.title or "",
+                    finding.description or "",
+                    json.dumps(finding.evidence or {}, ensure_ascii=False, default=str),
+                    json.dumps(finding.references or [], ensure_ascii=False, default=str),
+                ]
+            )
+            cve_ids = {match.upper() for match in re.findall(r"CVE-\d{4}-\d{4,7}", text, re.IGNORECASE)}
+            if not cve_ids:
+                continue
+            kev = finding.kev
+            epss = finding.epss
+            for cve_id in cve_ids:
+                cached = await self.repository.get_cve(cve_id)
+                if cached:
+                    kev = kev or cached.kev
+                    epss = max(epss, cached.epss)
+            if kev != finding.kev or epss > finding.epss:
+                await self.repository.update_finding(finding.id, kev=kev, epss=epss)
+                updated += 1
+        return updated
 
     async def sync_kev(self) -> dict[str, Any]:
         url = self.settings.intel.kev_url
