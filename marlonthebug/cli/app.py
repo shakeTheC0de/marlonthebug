@@ -73,13 +73,16 @@ def _resolve_workspace(repository: Repository, name: str | None):
     return resolve()
 
 
-@cli.callback()
+@cli.callback(invoke_without_command=True)
 def main(
-    version: bool = typer.Option(False, "--version", "-v", help="Mostrar versión"),
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-v", is_flag=True, help="Mostrar versión"),
 ) -> None:
     if version:
         typer.echo(f"MarlonTheBug v{__version__}")
         raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
 
 
 @cli.command()

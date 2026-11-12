@@ -133,7 +133,7 @@ class Repository:
         ports: list[int] | None = None,
         metadata: dict | None = None,
     ) -> TargetModel | None:
-        host = host.strip().lower()
+        host = _normalize_host(host)
         async with self.db.session() as session:
             workspace = await session.get(WorkspaceModel, workspace_id)
             if not workspace:
@@ -832,3 +832,12 @@ def _scope_host(value: str) -> str:
     if "://" in candidate:
         return urlparse(candidate).hostname or candidate
     return urlparse(f"//{candidate}").hostname or candidate
+
+
+def _normalize_host(value: str) -> str:
+    from urllib.parse import urlparse
+
+    candidate = value.strip().lower()
+    if "://" in candidate:
+        return (urlparse(candidate).netloc or candidate).lower()
+    return candidate.split("/")[0]
