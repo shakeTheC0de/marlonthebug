@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, stat_card, severity_badge, scan_status_badge, empty_state %}
+{% block title %}{{ workspace.name }} · MarlonTheBug{% endblock %}
+{% block page_title %}{{ workspace.name }}{% endblock %}
+{% block page_subtitle %}{{ workspace.client_name or 'Proyecto de auditoría' }}{% if workspace.description %} · {{ workspace.description }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="stat-grid">
+  {{ stat_card('Hallazgos', stats.total, 'en este proyecto', 'default') }}
+  {{ stat_card('Activos', stats.assets, 'dominios e IPs', 'accent') }}
+  {{ stat_card('Análisis', stats.scans, 'ejecutados', 'default') }}
+  {{ stat_card('Informes', stats.reports, 'generados', 'default') }}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Alcance</span><h2>Autorización y límites</h2></div>
+      <span class="scope-state {{ 'on' if workspace.allow_exploitation else 'off' }}">Explotación {{ 'activa' if workspace.allow_exploitation else 'desactivada' }}</span>
+    </div>
+    <form method="post" action="/workspaces/{{ workspace.id }}/scope" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">
+        <span>Dominios permitidos (uno por línea o separados por coma)</span>
+        <textarea name="allowed_domains" rows="3" placeholder="example.com&#10;*.example.com">{{ workspace.scope.get('allowed_domains', [])|join('\n') }}</textarea>
+      </label>
+      <label class="field">
+        <span>Rangos IP / CIDR permitidos</span>
+        <textarea name="allowed_ip_ranges" rows="2" placeholder="10.0.1.0/24">{{ workspace.scope.get('allowed_ip_ranges', [])|join('\n') }}</textarea>
+      </label>
+      <label class="field">
+        <span>Objetivos excluidos</span>
+        <textarea name="excluded" rows="2" placeholder="*.cdn.example.com">{{ workspace.scope.get('excluded', [])|join('\n') }}</textarea>
+      </label>
+      <div class="form-row">
+        <label class="check"><input type="checkbox" name="allow_exploitation" {% if workspace.allow_exploitation %}checked{% endif %}><span>Permitir explotación</span></label>
+        <label class="check"><input type="checkbox" name="skip_confirmation" {% if not workspace.require_confirmation %}checked{% endif %}><span>Omitir confirmación</span></label>
+      </div>
+      <button class="btn btn-ghost" type="submit">{{ icon('check', 16) }} Guardar alcance</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Inventario</span><h2>Activos</h2></div>
+      <a class="link" href="/assets?workspace={{ workspace.id }}">Ver detalle {{ icon('chevron', 14) }}</a>
+    </div>
+    {% if workspace.targets %}
+    <div class="table-wrap">
+      <table class="table compact">
+        <thead><tr><th>Host</th><th>Tipo</th><th>Tecnologías</th><th>Puertos</th></tr></thead>
+        <tbody>
+        {% for target in workspace.targets %}
+        <tr>
+          <td><a class="mono link" href="/assets/{{ target.id }}">{{ target.host }}</a></td>
+          <td><span class="pill">{{ target.kind }}</span></td>
+          <td class="muted">{{ target.technologies|join(', ') if target.technologies else '—' }}</td>
+          <td class="mono">{{ target.ports|join(', ') if target.ports else '—' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      {{ empty_state('Sin activos', 'Añade el primer dominio o IP para poder lanzar análisis.', 'server') }}
+    {% endif %}
+    <form method="post" action="/workspaces/{{ workspace.id }}/targets" class="inline-add">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="targets" placeholder="example.com, 10.0.0.5" required>
+      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('plus', 15) }} Añadir</button>
+    </form>
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Actividad</span><h2>Análisis</h2></div>
+      <a class="link" href="/scans?workspace={{ workspace.id }}">Historial {{ icon('chevron', 14) }}</a>
+    </div>
+    {% if scans %}
+    <div class="scan-list">
+      {% for scan in scans %}
+      <a class="scan-row" href="/scans/{{ scan.id }}">
+        <div class="scan-icon">{{ icon('radar', 17) }}</div>
+        <div class="scan-main">
+          <div class="scan-title">{{ scan.profile|capitalize }} · {{ scan.targets|length }} objetivo(s)</div>
+          <div class="scan-meta">{{ scan.created_at|relative_time }}</div>
+        </div>
+        <div class="scan-side">{{ scan_status_badge(scan.status) }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+      {{ empty_state('Sin análisis', 'Lanza un análisis de reconocimiento o web desde el botón superior.', 'radar') }}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Bandeja</span><h2>Últimos hallazgos</h2></div>
+      <a class="link" href="/findings?workspace={{ workspace.id }}">Abrir {{ icon('chevron', 14) }}</a>
+    </div>
+    {% if findings %}
+    <div class="finding-list">
+      {% for finding in findings %}
+      <a class="finding-row" href="/findings/{{ finding.id }}">
+        <span class="sev-indicator sev-{{ finding.severity }}"></span>
+        <div class="finding-main">
+          <div class="finding-title">{{ finding.title }}</div>
+          <div class="finding-meta">{{ finding.target_host }} · {{ finding.category }}</div>
+        </div>
+        {{ severity_badge(finding.severity) }}
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+      {{ empty_state('Sin hallazgos', 'Los resultados aparecerán aquí en cuanto termine el primer análisis.', 'bug') }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="danger-zone">
+  <div>
+    <h3>Eliminar proyecto</h3>
+    <p>Se borrarán el alcance, los activos, los hallazgos y los informes asociados. No se puede deshacer.</p>
+  </div>
+  <form method="post" action="/workspaces/{{ workspace.id }}/delete" data-confirm="¿Eliminar el proyecto y todos sus datos?">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-danger btn-sm" type="submit">{{ icon('trash', 15) }} Eliminar proyecto</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, stat_card, severity_badge, scan_status_badge, empty_state %}
+{% block title %}Análisis {{ scan.id[:8] }} · MarlonTheBug{% endblock %}
+{% block page_title %}Análisis en curso{% if scan.status in ['completed','failed','cancelled','interrupted'] %} · finalizado{% endif %}{% endblock %}
+{% block page_subtitle %}{{ scan.profile|capitalize }} · {{ scan.targets|join(', ') }}{% endblock %}
+
+{% block topbar_actions %}
+{% if is_running %}
+<form method="post" action="/scans/{{ scan.id }}/cancel" class="inline-form" data-confirm="¿Cancelar el análisis en curso?">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="btn btn-danger btn-sm" type="submit">{{ icon('stop', 15) }} Cancelar</button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="scan-header card">
+  <div class="scan-header-main">
+    <div class="scan-status-block">
+      {{ scan_status_badge(scan.status) }}
+      {% if is_running %}<span class="live-dot"></span><span class="muted small">en vivo</span>{% endif %}
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="scan-progress" style="width: {% if scan.status == 'completed' %}100{% elif is_running %}8{% else %}0{% endif %}%"></div></div>
+    <div class="scan-timing muted small">
+      Iniciado {{ scan.started_at|datetimefmt if scan.started_at else scan.created_at|datetimefmt }}
+      {% if scan.finished_at %} · Finalizado {{ scan.finished_at|datetimefmt }}{% endif %}
+    </div>
+  </div>
+  <div class="scan-header-meta">
+    <span class="tag">{{ scan.profile }}</span>
+    {% for category in scan.categories %}<span class="tag">{{ category }}</span>{% endfor %}
+    {% if scan.modules %}<span class="tag">{{ scan.modules|length }} módulos</span>{% endif %}
+  </div>
+</div>
+
+{% if scan.error %}
+<div class="flash flash-err">{{ icon('alert', 18) }} <span>{{ scan.error }}</span></div>
+{% endif %}
+
+<div class="stat-grid">
+  {{ stat_card('Hallazgos', stats.get('findings', 0), 'detectados en esta ejecución', 'danger') }}
+  {{ stat_card('Peticiones', stats.get('requests', 0), 'de ' ~ (stats.get('budget', 0) or '∞'), 'accent') }}
+  {{ stat_card('Errores', stats.get('errors', 0), 'peticiones fallidas', 'warning') }}
+  {{ stat_card('Duración', (stats.get('duration', 0)|round(0)|int|string ~ ' s') if stats.get('duration') else '—', 'tiempo de ejecución', 'default') }}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Consola</span><h2>Actividad en vivo</h2></div>
+      <span class="pill" id="scan-live-state">{{ 'conectada' if is_running else 'finalizada' }}</span>
+    </div>
+    <div class="terminal" id="scan-console" data-stream-url="/scans/{{ scan.id }}/stream">
+      {% for entry in logs[-200:] %}
+      <div class="log-line log-{{ entry.level|lower }}"><span class="log-time">{{ entry.time }}</span><span class="log-level">{{ entry.level }}</span><span class="log-msg">{{ entry.message }}</span></div>
+      {% else %}
+      <div class="log-line log-info"><span class="log-time">--:--:--</span><span class="log-level">INFO</span><span class="log-msg">Esperando eventos del análisis…</span></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Cobertura</span><h2>Configuración</h2></div>
+    </div>
+    <dl class="meta-list">
+      <div><dt>Objetivos</dt><dd class="mono small">{{ scan.targets|join(', ') }}</dd></div>
+      <div><dt>Perfil</dt><dd>{{ scan.profile }}</dd></div>
+      <div><dt>Categorías</dt><dd>{{ scan.categories|join(', ') }}</dd></div>
+      <div><dt>Módulos</dt><dd>{{ scan.modules|length if scan.modules else 'automático' }}</dd></div>
+      <div><dt>Creado por</dt><dd>{{ scan.created_by }}</dd></div>
+      <div><dt>ID</dt><dd class="mono small">{{ scan.id }}</dd></div>
+    </dl>
+    <div class="card-actions">
+      <a class="btn btn-ghost btn-sm" href="/reports/new?workspace={{ scan.workspace_id }}&scan={{ scan.id }}">{{ icon('file', 15) }} Generar informe</a>
+      <a class="btn btn-ghost btn-sm" href="/findings?workspace={{ scan.workspace_id }}">{{ icon('bug', 15) }} Ver hallazgos</a>
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <div><span class="eyebrow">Resultados</span><h2>Hallazgos del análisis</h2></div>
+    <span class="pill">{{ findings|length }} resultados</span>
+  </div>
+  {% if findings %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Severidad</th><th>Hallazgo</th><th>Objetivo</th><th>Plugin</th><th>CVSS</th><th>Confianza</th><th></th></tr></thead>
+      <tbody>
+      {% for finding in findings %}
+      <tr>
+        <td>{{ severity_badge(finding.severity) }}</td>
+        <td><a class="link" href="/findings/{{ finding.id }}">{{ finding.title }}</a>{% if finding.kev %}<span class="tag tag-kev">{{ icon('zap', 12) }} KEV</span>{% endif %}</td>
+        <td class="mono small">{{ finding.target_host }}</td>
+        <td class="muted small">{{ finding.plugin_name }}</td>
+        <td class="mono">{{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}</td>
+        <td>{{ finding.confidence }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/findings/{{ finding.id }}">Abrir</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty_state('Sin hallazgos en esta ejecución', 'Si el análisis sigue en curso, los resultados aparecerán aquí en tiempo real.', 'search') }}
+  {% endif %}
+</section>
+{% endblock %}

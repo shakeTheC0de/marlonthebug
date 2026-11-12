@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}{{ code }} · MarlonTheBug{% endblock %}
+{% block page_title %}Error {{ code }}{% endblock %}
+{% block page_subtitle %}La operación no se pudo completar{% endblock %}
+{% block content %}
+<div class="error-card">
+  <div class="error-icon">{{ icon('alert', 42) }}</div>
+  <h2>{{ message }}</h2>
+  <p class="muted">Revisa la ruta, vuelve al panel o consulta los logs si el problema persiste.</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="/">{{ icon('dashboard', 16) }} Volver al dashboard</a>
+    <a class="btn btn-ghost" href="/scans">Ver análisis</a>
+  </div>
+</div>
+{% endblock %}

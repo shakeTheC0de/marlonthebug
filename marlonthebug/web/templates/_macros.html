@@ -1,0 +1,143 @@
+{# Reusable UI fragments. Kept dependency-free so the panel works offline. #}
+{% macro icon(name, size=18, cls='') -%}
+<svg class="icon {{ cls }}" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'dashboard' -%}
+<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+{%- elif name == 'folder' -%}
+<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+{%- elif name == 'radar' -%}
+<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/><path d="M12 4v2M20 12h-2M12 20v-2M4 12h2"/>
+{%- elif name == 'bug' -%}
+<path d="M8 8a4 4 0 0 1 8 0v1H8z"/><path d="M6 9h12v4a6 6 0 0 1-12 0z"/><path d="M6 13H4M20 13h-2M7 17l-2 2M17 17l2 2M9 21h6"/><path d="M9 6 7 4M15 6l2-2"/>
+{%- elif name == 'server' -%}
+<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/>
+{%- elif name == 'file' -%}
+<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h6"/>
+{%- elif name == 'shield' -%}
+<path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9.5 12 1.8 1.8 3.2-3.6"/>
+{%- elif name == 'settings' -%}
+<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 2-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-3v-.2a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-2-2 .1-.1A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.6-1H5v-3h.4A1.7 1.7 0 0 0 7 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-2 .1.1A1.7 1.7 0 0 0 10.6 5a1.7 1.7 0 0 0 1-1.6V3h3v.4a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 2 2-.1.1A1.7 1.7 0 0 0 19 9c.2.6.8 1 1.6 1H21v3h-.4a1.7 1.7 0 0 0-1.2 2z"/>
+{%- elif name == 'plus' -%}
+<path d="M12 5v14M5 12h14"/>
+{%- elif name == 'search' -%}
+<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+{%- elif name == 'download' -%}
+<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>
+{%- elif name == 'play' -%}
+<path d="m8 5 11 7-11 7z"/>
+{%- elif name == 'stop' -%}
+<rect x="6" y="6" width="12" height="12" rx="2"/>
+{%- elif name == 'external' -%}
+<path d="M14 4h6v6M20 4l-9 9M10 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-5"/>
+{%- elif name == 'chevron' -%}
+<path d="m9 6 6 6-6 6"/>
+{%- elif name == 'alert' -%}
+<path d="M12 3 2 21h20z"/><path d="M12 9v5M12 17h.01"/>
+{%- elif name == 'check' -%}
+<path d="m4 12 5 5L20 6"/>
+{%- elif name == 'clock' -%}
+<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+{%- elif name == 'database' -%}
+<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/>
+{%- elif name == 'refresh' -%}
+<path d="M20 11a8 8 0 1 0-2.3 6.7"/><path d="M20 4v7h-7"/>
+{%- elif name == 'trash' -%}
+<path d="M4 7h16M9 7V5h6v2M7 7l1 14h8l1-14"/><path d="M10 11v6M14 11v6"/>
+{%- elif name == 'arrow-left' -%}
+<path d="M19 12H5M11 6l-6 6 6 6"/>
+{%- elif name == 'key' -%}
+<circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M17 4l3 3M15 6l2 2"/>
+{%- elif name == 'globe' -%}
+<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>
+{%- elif name == 'cpu' -%}
+<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+{%- elif name == 'lock' -%}
+<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+{%- elif name == 'chart' -%}
+<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>
+{%- elif name == 'x' -%}
+<path d="m6 6 12 12M18 6 6 18"/>
+{%- elif name == 'menu' -%}
+<path d="M4 7h16M4 12h16M4 17h16"/>
+{%- elif name == 'copy' -%}
+<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+{%- elif name == 'filter' -%}
+<path d="M4 5h16l-6 7v6l-4 2v-8z"/>
+{%- elif name == 'eye' -%}
+<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>
+{%- elif name == 'zap' -%}
+<path d="M13 2 4 14h6l-1 8 9-12h-6z"/>
+{%- elif name == 'target' -%}
+<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>
+{%- elif name == 'book' -%}
+<path d="M4 5a2 2 0 0 1 2-2h14v18H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h14"/>
+{%- elif name == 'wifi' -%}
+<path d="M2 8.5a15 15 0 0 1 20 0M5 12a10.5 10.5 0 0 1 14 0M8.5 15.5a5.5 5.5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{% macro severity_badge(severity) -%}
+<span class="badge badge-{{ severity }}">{{ severity|severity_label }}</span>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+<span class="badge status-{{ status }}">{{ status|status_label }}</span>
+{%- endmacro %}
+
+{% macro scan_status_badge(status) -%}
+<span class="badge scan-{{ status }}">{{ status|scan_status_label }}</span>
+{%- endmacro %}
+
+{% macro confidence_badge(confidence) -%}
+<span class="confidence confidence-{{ confidence }}">{{ confidence|confidence_label }}</span>
+{%- endmacro %}
+
+{% macro stat_card(label, value, sub='', tone='default') -%}
+<div class="stat-card tone-{{ tone }}">
+  <div class="stat-label">{{ label }}</div>
+  <div class="stat-value">{{ value }}</div>
+  {% if sub %}<div class="stat-sub">{{ sub }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro empty_state(title, text, icon_name='shield') -%}
+<div class="empty-state">
+  <div class="empty-icon">{{ icon(icon_name, 34) }}</div>
+  <h3>{{ title }}</h3>
+  <p>{{ text }}</p>
+</div>
+{%- endmacro %}
+
+{% macro pagination(page, total_pages, page_url) -%}
+{% if total_pages > 1 %}
+<nav class="pagination" aria-label="Paginación">
+  {% if page > 1 %}<a class="page-btn" href="?{{ page_url(page=page-1) }}">Anterior</a>{% endif %}
+  {% for number in range(1, total_pages + 1) %}
+    {% if number == page %}
+      <span class="page-btn active">{{ number }}</span>
+    {% elif number <= 2 or number > total_pages - 2 or (number >= page - 1 and number <= page + 1) %}
+      <a class="page-btn" href="?{{ page_url(page=number) }}">{{ number }}</a>
+    {% elif number == 3 or number == total_pages - 2 %}
+      <span class="page-dots">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if page < total_pages %}<a class="page-btn" href="?{{ page_url(page=page+1) }}">Siguiente</a>{% endif %}
+</nav>
+{% endif %}
+{%- endmacro %}
+
+{% macro flash_messages(ok, err) -%}
+{% if ok %}<div class="flash flash-ok" data-flash>{{ icon('check', 18) }} <span>{{ ok }}</span></div>{% endif %}
+{% if err %}<div class="flash flash-err" data-flash>{{ icon('alert', 18) }} <span>{{ err }}</span></div>{% endif %}
+{%- endmacro %}
+
+{% macro severity_bar(severity, counts) -%}
+{% set total = counts.values()|sum if counts else 0 %}
+<div class="sev-row">
+  <span class="sev-dot dot-{{ severity }}"></span>
+  <span class="sev-name">{{ severity|severity_label }}</span>
+  <div class="sev-track"><div class="sev-fill fill-{{ severity }}" style="width: {{ ((counts.get(severity, 0) / total * 100) if total else 0)|round(1) }}%"></div></div>
+  <span class="sev-count">{{ counts.get(severity, 0) }}</span>
+</div>
+{%- endmacro %}

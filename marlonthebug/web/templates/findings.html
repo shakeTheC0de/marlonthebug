@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, severity_badge, status_badge, confidence_badge, empty_state, pagination %}
+{% block title %}Hallazgos · MarlonTheBug{% endblock %}
+{% block page_title %}Hallazgos{% endblock %}
+{% block page_subtitle %}{{ total }} resultados · triaje, evidencia y priorización{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-info">
+    <span class="pill">{{ total }} hallazgos</span>
+    {% if current_workspace %}<span class="muted">{{ current_workspace.name }}</span>{% endif %}
+    {% if kev %}<span class="tag tag-kev">{{ icon('zap', 12) }} solo KEV</span>{% endif %}
+  </div>
+  <a class="btn btn-ghost btn-sm" href="/findings/export?{{ request.url.query }}">{{ icon('download', 15) }} Exportar CSV</a>
+</div>
+
+<form method="get" action="/findings" class="filter-bar">
+  {% if current_workspace %}<input type="hidden" name="workspace" value="{{ current_workspace.id }}">{% endif %}
+  <label class="search-box">
+    {{ icon('search', 16) }}
+    <input type="search" name="q" value="{{ query }}" placeholder="Buscar por título, endpoint, plugin…">
+  </label>
+  <select name="severity" class="select" aria-label="Severidad">
+    <option value="">Todas las severidades</option>
+    {% for severity in severities_available %}
+    <option value="{{ severity }}" {% if severity in severities %}selected{% endif %}>{{ severity|severity_label }}</option>
+    {% endfor %}
+  </select>
+  <select name="status" class="select" aria-label="Estado">
+    <option value="">Todos los estados</option>
+    {% for status in statuses_available %}
+    <option value="{{ status }}" {% if status in statuses_filter %}selected{% endif %}>{{ status|status_label }}</option>
+    {% endfor %}
+  </select>
+  <select name="category" class="select" aria-label="Categoría">
+    <option value="">Todas</option>
+    {% for category in categories_available %}
+    <option value="{{ category }}" {% if category in categories %}selected{% endif %}>{{ category_labels.get(category, category) }}</option>
+    {% endfor %}
+  </select>
+  <select name="sort" class="select" aria-label="Orden">
+    <option value="severity" {% if sort == 'severity' %}selected{% endif %}>Severidad</option>
+    <option value="cvss" {% if sort == 'cvss' %}selected{% endif %}>CVSS</option>
+    <option value="recent" {% if sort == 'recent' %}selected{% endif %}>Recientes</option>
+    <option value="kev" {% if sort == 'kev' %}selected{% endif %}>KEV primero</option>
+  </select>
+  <label class="check inline-check"><input type="checkbox" name="kev" value="1" {% if kev %}checked{% endif %}><span>KEV</span></label>
+  <button class="btn btn-ghost btn-sm" type="submit">{{ icon('filter', 15) }} Filtrar</button>
+  <a class="link" href="/findings{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">Limpiar</a>
+</form>
+
+{% if findings %}
+<div class="card no-pad">
+  <div class="table-wrap">
+    <table class="table findings-table">
+      <thead>
+        <tr><th>Severidad</th><th>Hallazgo</th><th>Objetivo</th><th>Categoría</th><th>CVSS</th><th>Confianza</th><th>Estado</th><th>Visto</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for finding in findings %}
+      <tr class="finding-tr">
+        <td>{{ severity_badge(finding.severity) }}</td>
+        <td>
+          <a class="finding-title-link" href="/findings/{{ finding.id }}">{{ finding.title }}</a>
+          <div class="finding-sub">
+            <span class="mono">{{ finding.endpoint|truncate(70) if finding.endpoint else finding.target_host }}</span>
+            {% if finding.kev %}<span class="tag tag-kev">{{ icon('zap', 11) }} KEV</span>{% endif %}
+            {% if finding.cwe %}<span class="tag">{{ finding.cwe }}</span>{% endif %}
+          </div>
+        </td>
+        <td class="mono small">{{ finding.target_host }}</td>
+        <td><span class="tag">{{ finding.category }}</span></td>
+        <td class="mono">{{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}</td>
+        <td>{{ confidence_badge(finding.confidence) }}</td>
+        <td>{{ status_badge(finding.status) }}</td>
+        <td class="muted small">{{ finding.last_seen|relative_time }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/findings/{{ finding.id }}">Abrir</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{ pagination(page, total_pages, page_url) }}
+{% else %}
+  {{ empty_state('Sin resultados', 'Prueba a cambiar los filtros o lanza un análisis nuevo para generar hallazgos.', 'search') }}
+{% endif %}
+{% endblock %}

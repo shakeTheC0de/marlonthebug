@@ -1,0 +1,38 @@
+{% from "_macros.html" import icon %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acceso · MarlonTheBug</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="/static/img/logo.svg" alt="" width="52" height="52">
+        <div>
+          <h1>MarlonTheBug</h1>
+          <p>Panel local de auditoría</p>
+        </div>
+      </div>
+      <p class="login-help">Introduce el token de acceso que se muestra al arrancar el panel. También está guardado en el archivo <code>panel.token</code> de tu directorio de datos.</p>
+      {% if error %}<div class="flash flash-err">{{ icon('alert', 18) }} <span>{{ error }}</span></div>{% endif %}
+      <form method="post" action="/login" class="stack">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <label class="field">
+          <span>Token de acceso</span>
+          <input type="password" name="token" autocomplete="current-password" autofocus required placeholder="Pega el token del panel">
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">{{ icon('key', 18) }} Entrar al panel</button>
+      </form>
+      <div class="login-foot">
+        <span>{{ icon('shield', 14) }} Sesión local · sin telemetría</span>
+        <span>v{{ app_version }}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

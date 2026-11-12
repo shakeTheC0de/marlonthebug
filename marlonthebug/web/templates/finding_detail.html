@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, severity_badge, status_badge, confidence_badge %}
+{% block title %}{{ finding.title }} · MarlonTheBug{% endblock %}
+{% block page_title %}{{ finding.title }}{% endblock %}
+{% block page_subtitle %}{{ finding.target_host }} · {{ finding.category }}{% endblock %}
+
+{% block content %}
+<div class="finding-hero">
+  <div class="finding-hero-main">
+    <div class="finding-badges">
+      {{ severity_badge(finding.severity) }}
+      {{ status_badge(finding.status) }}
+      {{ confidence_badge(finding.confidence) }}
+      {% if finding.kev %}<span class="badge tag-kev">{{ icon('zap', 12) }} CISA KEV</span>{% endif %}
+      {% if finding.verified %}<span class="badge status-confirmed">{{ icon('check', 12) }} Verificado</span>{% endif %}
+    </div>
+    <p class="finding-lead">{{ finding.description }}</p>
+  </div>
+  <div class="finding-score">
+    <span class="score-value cvss-{{ finding.cvss_score|cvss_class }}">{{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}</span>
+    <span class="score-label">CVSS</span>
+    {% if finding.cvss_vector %}<code class="score-vector">{{ finding.cvss_vector }}</code>{% endif %}
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><div><span class="eyebrow">Contexto</span><h2>Detalles técnicos</h2></div></div>
+    <dl class="meta-list">
+      <div><dt>Objetivo</dt><dd class="mono">{% if finding.target %}<a class="link" href="/assets/{{ finding.target.id }}">{{ finding.target_host }}</a>{% else %}{{ finding.target_host }}{% endif %}</dd></div>
+      <div><dt>Endpoint</dt><dd class="mono small break-all">{{ finding.endpoint or '—' }}</dd></div>
+      <div><dt>Categoría</dt><dd>{{ category_labels.get(finding.category, finding.category) }}</dd></div>
+      <div><dt>Plugin</dt><dd class="mono">{{ finding.plugin_name }}</dd></div>
+      <div><dt>CWE</dt><dd>{{ finding.cwe or '—' }}</dd></div>
+      <div><dt>OWASP</dt><dd>{{ finding.owasp or '—' }}</dd></div>
+      <div><dt>EPSS</dt><dd>{{ '%.1f%%'|format(finding.epss * 100) if finding.epss else '—' }}</dd></div>
+      <div><dt>Primera detección</dt><dd>{{ finding.first_seen|datetimefmt }}</dd></div>
+      <div><dt>Última detección</dt><dd>{{ finding.last_seen|datetimefmt }}</dd></div>
+      {% if finding.scan_run %}<div><dt>Análisis</dt><dd><a class="link" href="/scans/{{ finding.scan_run.id }}">{{ finding.scan_run.id[:8] }}</a></dd></div>{% endif %}
+    </dl>
+    {% if finding.remediation %}
+    <h3 class="section-title">Remediación</h3>
+    <div class="prose">{{ finding.remediation }}</div>
+    {% endif %}
+    {% if finding.references %}
+    <h3 class="section-title">Referencias</h3>
+    <ul class="link-list">
+      {% for reference in finding.references %}
+      <li><a href="{{ reference.url if reference is mapping else reference }}" target="_blank" rel="noopener noreferrer">{{ reference.url if reference is mapping else reference }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><span class="eyebrow">Triaje</span><h2>Estado del hallazgo</h2></div></div>
+    <form method="post" action="/findings/{{ finding.id }}/status" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">
+        <span>Estado</span>
+        <select name="status">
+          {% for status in statuses_available %}
+          <option value="{{ status }}" {% if finding.status == status %}selected{% endif %}>{{ status|status_label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span>Notas internas</span>
+        <textarea name="notes" rows="5" placeholder="Contexto, validación manual, ticket asociado…">{{ finding.notes }}</textarea>
+      </label>
+      <button class="btn btn-primary" type="submit">{{ icon('check', 16) }} Guardar triaje</button>
+    </form>
+
+    <h3 class="section-title">Evidencia</h3>
+    <div class="evidence-tabs" data-tabs>
+      <button class="tab active" type="button" data-tab="evidence-json">JSON</button>
+      {% if finding.evidence.get('request') %}<button class="tab" type="button" data-tab="evidence-request">Request</button>{% endif %}
+      {% if finding.evidence.get('response') %}<button class="tab" type="button" data-tab="evidence-response">Response</button>{% endif %}
+    </div>
+    <pre class="code-block" id="evidence-json"><code>{{ finding.evidence|json_pretty }}</code></pre>
+    {% if finding.evidence.get('request') %}
+    <pre class="code-block hidden" id="evidence-request"><code>{{ finding.evidence.get('request')|json_pretty }}</code></pre>
+    {% endif %}
+    {% if finding.evidence.get('response') %}
+    <pre class="code-block hidden" id="evidence-response"><code>{{ finding.evidence.get('response')|json_pretty }}</code></pre>
+    {% endif %}
+    <button class="btn btn-ghost btn-sm copy-btn" type="button" data-copy-target="evidence-json">{{ icon('copy', 14) }} Copiar evidencia</button>
+
+    {% if finding.waf_rules %}
+    <h3 class="section-title">Reglas WAF sugeridas</h3>
+    {% for rule in finding.waf_rules %}
+    <pre class="code-block"><code>{{ rule }}</code></pre>
+    {% endfor %}
+    {% endif %}
+  </section>
+</div>
+
+<div class="danger-zone">
+  <div><h3>Eliminar hallazgo</h3><p>Úsalo solo si es ruido o un falso positivo que no quieres conservar en el histórico.</p></div>
+  <form method="post" action="/findings/{{ finding.id }}/delete" data-confirm="¿Eliminar este hallazgo definitivamente?">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-danger btn-sm" type="submit">{{ icon('trash', 15) }} Eliminar</button>
+  </form>
+</div>
+{% endblock %}

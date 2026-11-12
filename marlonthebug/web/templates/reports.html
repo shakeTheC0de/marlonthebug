@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, empty_state %}
+{% block title %}Informes · MarlonTheBug{% endblock %}
+{% block page_title %}Informes{% endblock %}
+{% block page_subtitle %}Entregables ejecutivos y técnicos generados desde la evidencia{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-info"><span class="pill">{{ reports|length }} informes</span>{% if current_workspace %}<span class="muted">{{ current_workspace.name }}</span>{% endif %}</div>
+  <a class="btn btn-primary" href="/reports/new{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">{{ icon('plus', 17) }} Nuevo informe</a>
+</div>
+
+{% if reports %}
+<div class="card no-pad">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Informe</th><th>Proyecto</th><th>Formato</th><th>Plantilla</th><th>Tamaño</th><th>Generado</th><th></th></tr></thead>
+      <tbody>
+      {% for report in reports %}
+      <tr>
+        <td><a class="link" href="/reports/{{ report.id }}">{{ report.name }}</a><div class="muted small">{{ report.filename }}</div></td>
+        <td>{{ report.workspace.name if report.workspace else '—' }}</td>
+        <td><span class="tag">{{ report.format|upper }}</span></td>
+        <td>{{ report.template }}</td>
+        <td class="mono small">{{ report.size|filesize }}</td>
+        <td class="muted small">{{ report.created_at|datetimefmt }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/reports/{{ report.id }}/download">{{ icon('download', 14) }} Descargar</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+  {{ empty_state('Sin informes todavía', 'Genera un informe ejecutivo o técnico a partir de los hallazgos de un proyecto o análisis.', 'file') }}
+{% endif %}
+{% endblock %}

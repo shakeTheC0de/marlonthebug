@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, empty_state %}
+{% block title %}Activos · MarlonTheBug{% endblock %}
+{% block page_title %}Activos{% endblock %}
+{% block page_subtitle %}Inventario de dominios, IPs y tecnologías detectadas{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-info">
+    <span class="pill">{{ assets|length }} activos</span>
+    {% if current_workspace %}<span class="muted">{{ current_workspace.name }}</span>{% endif %}
+  </div>
+  {% if current_workspace %}
+  <form method="post" action="/workspaces/{{ current_workspace.id }}/targets" class="inline-add">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="targets" placeholder="nuevo.example.com, 10.0.0.5" required>
+    <button class="btn btn-ghost btn-sm" type="submit">{{ icon('plus', 15) }} Añadir activo</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if assets %}
+<div class="card no-pad">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Host</th><th>Tipo</th><th>Tecnologías</th><th>Puertos</th><th>Hallazgos</th><th>Última actividad</th><th></th></tr></thead>
+      <tbody>
+      {% for target, count in assets %}
+      <tr>
+        <td><a class="mono link" href="/assets/{{ target.id }}">{{ target.host }}</a></td>
+        <td><span class="pill">{{ target.kind }}</span></td>
+        <td>{% for tech in target.technologies[:4] %}<span class="tag">{{ tech }}</span>{% endfor %}{% if target.technologies|length > 4 %}<span class="muted small">+{{ target.technologies|length - 4 }}</span>{% endif %}</td>
+        <td class="mono small">{{ target.ports|join(', ') if target.ports else '—' }}</td>
+        <td><strong>{{ count }}</strong></td>
+        <td class="muted small">{{ target.last_seen|relative_time }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/assets/{{ target.id }}">Abrir</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+  {{ empty_state('Sin activos en este proyecto', 'Añade dominios o IPs para construir el inventario y poder lanzar análisis.', 'server') }}
+{% endif %}
+{% endblock %}

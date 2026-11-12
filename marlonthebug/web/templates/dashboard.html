@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, stat_card, severity_badge, scan_status_badge, severity_bar, empty_state %}
+
+{% block title %}Dashboard · MarlonTheBug{% endblock %}
+{% block page_title %}Postura de seguridad{% endblock %}
+{% block page_subtitle %}{% if current_workspace %}{{ current_workspace.name }}{% if current_workspace.client_name %} · {{ current_workspace.client_name }}{% endif %}{% else %}Vista global de todos los proyectos{% endif %}{% endblock %}
+
+{% block content %}
+{% if not workspaces %}
+<div class="hero-card">
+  <div class="hero-icon">{{ icon('radar', 44) }}</div>
+  <div>
+    <span class="eyebrow">Primer paso</span>
+    <h2>Crea tu primer proyecto de auditoría</h2>
+    <p>Un proyecto agrupa alcance, activos, análisis, hallazgos e informes. Define qué sistemas puedes evaluar y empieza con un análisis de reconocimiento.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="/workspaces">{{ icon('plus', 17) }} Crear proyecto</a>
+      <a class="btn btn-ghost" href="/intel">{{ icon('shield', 17) }} Ver inteligencia</a>
+    </div>
+  </div>
+</div>
+{% else %}
+
+<div class="stat-grid">
+  {{ stat_card('Hallazgos', stats.total, 'en el proyecto actual', 'default') }}
+  {{ stat_card('Críticos + altos', stats.severity.get('critical', 0) + stats.severity.get('high', 0), 'requieren atención prioritaria', 'danger') }}
+  {{ stat_card('Activos', stats.assets, 'dominios e IPs en alcance', 'accent') }}
+  {{ stat_card('En KEV', stats.kev, 'explotados en el mundo real', 'warning') }}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Distribución</span>
+        <h2>Severidad de hallazgos</h2>
+      </div>
+      <a class="link" href="/findings{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">Ver todos {{ icon('chevron', 14) }}</a>
+    </div>
+    <div class="severity-list">
+      {% for severity in severity_order %}
+        {{ severity_bar(severity, stats.severity) }}
+      {% endfor %}
+    </div>
+    <div class="card-foot">
+      <span class="muted">{{ stats.statuses.get('open', 0) }} abiertos · {{ stats.statuses.get('confirmed', 0) }} confirmados</span>
+      <span class="risk-pill risk-{{ stats.severity.get('critical', 0) and 'critical' or (stats.severity.get('high', 0) and 'high' or 'low') }}">
+        Riesgo {{ 'crítico' if stats.severity.get('critical', 0) else ('alto' if stats.severity.get('high', 0) else ('medio' if stats.severity.get('medium', 0) else 'bajo')) }}
+      </span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Actividad</span>
+        <h2>Hallazgos últimos 14 días</h2>
+      </div>
+      <span class="pill">{{ stats.trend|sum(attribute=1) if stats.trend else 0 }} nuevos</span>
+    </div>
+    <div class="trend-chart" aria-label="Hallazgos por día">
+      {% set trend_max = (stats.trend|map('last')|max) if stats.trend else 1 %}
+      {% for day, count in stats.trend %}
+        <div class="trend-col" title="{{ day }}: {{ count }}">
+          <div class="trend-bar" style="height: {{ ((count / trend_max) * 100)|round(0) if trend_max else 0 }}%"></div>
+          <span class="trend-label">{{ day[5:] if day|length > 5 else day }}</span>
+        </div>
+      {% else %}
+        <div class="chart-empty">Sin actividad todavía. Lanza un análisis para empezar.</div>
+      {% endfor %}
+    </div>
+    <div class="card-foot">
+      <span class="muted">{{ stats.categories|length }} categorías con hallazgos</span>
+      <a class="link" href="/scans/new{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">{{ icon('play', 14) }} Nuevo análisis</a>
+    </div>
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Prioridad</span>
+        <h2>Hallazgos recientes</h2>
+      </div>
+      <a class="link" href="/findings{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">Abrir bandeja {{ icon('chevron', 14) }}</a>
+    </div>
+    {% if stats.recent_findings %}
+    <div class="finding-list">
+      {% for finding in stats.recent_findings %}
+      <a class="finding-row" href="/findings/{{ finding.id }}">
+        <span class="sev-indicator sev-{{ finding.severity }}"></span>
+        <div class="finding-main">
+          <div class="finding-title">{{ finding.title }}</div>
+          <div class="finding-meta">
+            <span>{{ finding.target_host or finding.endpoint|host_of }}</span>
+            <span class="dot-sep">·</span>
+            <span>{{ finding.category }}</span>
+            {% if finding.kev %}<span class="tag tag-kev">{{ icon('zap', 12) }} KEV</span>{% endif %}
+          </div>
+        </div>
+        <div class="finding-side">
+          {{ severity_badge(finding.severity) }}
+          <span class="cvss">{{ '%.1f'|format(finding.cvss_score) if finding.cvss_score else '—' }}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+      {{ empty_state('Sin hallazgos todavía', 'Lanza un análisis de reconocimiento o web para descubrir la superficie expuesta.', 'search') }}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Operación</span>
+        <h2>Análisis recientes</h2>
+      </div>
+      <a class="link" href="/scans{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">Historial {{ icon('chevron', 14) }}</a>
+    </div>
+    {% if recent_scans %}
+    <div class="scan-list">
+      {% for scan in recent_scans %}
+      <a class="scan-row" href="/scans/{{ scan.id }}">
+        <div class="scan-icon">{{ icon('radar', 17) }}</div>
+        <div class="scan-main">
+          <div class="scan-title">{{ scan.profile|capitalize }} · {{ scan.targets|length }} objetivo(s)</div>
+          <div class="scan-meta">{{ scan.created_at|relative_time }} · {{ scan.categories|join(', ') }}</div>
+        </div>
+        <div class="scan-side">
+          {{ scan_status_badge(scan.status) }}
+          <span class="scan-findings">{{ scan.stats.get('findings', 0) }} hallazgos</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+      {{ empty_state('Sin análisis ejecutados', 'Crea un análisis con perfil seguro o estándar para empezar a recoger evidencia.', 'radar') }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="card intel-card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Actualización</span>
+        <h2>Inteligencia de vulnerabilidades</h2>
+      </div>
+      <a class="link" href="/intel">Abrir centro {{ icon('chevron', 14) }}</a>
+    </div>
+    <div class="intel-stats">
+      <div><strong>{{ intel_summary.stats.total }}</strong><span>CVEs en caché</span></div>
+      <div><strong>{{ intel_summary.stats.kev }}</strong><span>en CISA KEV</span></div>
+      <div><strong>{{ intel_summary.stats.epss }}</strong><span>con EPSS</span></div>
+    </div>
+    <div class="feed-list">
+      {% for feed in intel_summary.feeds %}
+      <div class="feed-row">
+        <span class="feed-dot feed-{{ feed.status }}"></span>
+        <span class="feed-name">{{ feed.name }}</span>
+        <span class="feed-meta">{{ feed.last_sync|relative_time if feed.last_sync else 'nunca' }}</span>
+        <span class="feed-count">{{ feed.count }}</span>
+      </div>
+      {% else %}
+      <p class="muted">Sin feeds sincronizados. Conecta KEV y EPSS para priorizar lo que se explota de verdad.</p>
+      {% endfor %}
+    </div>
+    {% if not intel_summary.offline %}
+    <form method="post" action="/intel/sync" class="inline-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('refresh', 15) }} Actualizar inteligencia</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Acciones</span>
+        <h2>Atajos de trabajo</h2>
+      </div>
+    </div>
+    <div class="quick-grid">
+      <a class="quick-action" href="/scans/new{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">
+        <span class="quick-icon">{{ icon('play', 20) }}</span>
+        <strong>Nuevo análisis</strong>
+        <small>Reconocimiento, web o API</small>
+      </a>
+      <a class="quick-action" href="/reports/new{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">
+        <span class="quick-icon">{{ icon('file', 20) }}</span>
+        <strong>Generar informe</strong>
+        <small>Ejecutivo o técnico</small>
+      </a>
+      <a class="quick-action" href="/assets{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">
+        <span class="quick-icon">{{ icon('server', 20) }}</span>
+        <strong>Inventario</strong>
+        <small>Activos y tecnologías</small>
+      </a>
+      <a class="quick-action" href="/intel">
+        <span class="quick-icon">{{ icon('shield', 20) }}</span>
+        <strong>Inteligencia</strong>
+        <small>KEV, EPSS y CVEs</small>
+      </a>
+    </div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}

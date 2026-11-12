@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}{{ report.name }} · MarlonTheBug{% endblock %}
+{% block page_title %}{{ report.name }}{% endblock %}
+{% block page_subtitle %}{{ report.workspace.name if report.workspace else '' }} · {{ report.created_at|datetimefmt }}{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-info">
+    <span class="tag">{{ report.format|upper }}</span>
+    <span class="tag">{{ report.template }}</span>
+    <span class="tag">{{ report.language|upper }}</span>
+    <span class="muted small">{{ report.size|filesize }}</span>
+  </div>
+  <div class="toolbar-actions">
+    <a class="btn btn-primary" href="/reports/{{ report.id }}/download">{{ icon('download', 16) }} Descargar</a>
+    <a class="btn btn-ghost" href="/reports/{{ report.id }}/preview" target="_blank" rel="noopener">{{ icon('eye', 16) }} Abrir</a>
+    <form method="post" action="/reports/{{ report.id }}/delete" data-confirm="¿Eliminar este informe y su archivo?">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-danger btn-sm" type="submit">{{ icon('trash', 15) }} Eliminar</button>
+    </form>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head"><div><span class="eyebrow">Metadatos</span><h2>Detalle del entregable</h2></div></div>
+    <dl class="meta-list">
+      <div><dt>Archivo</dt><dd class="mono small">{{ report.filename }}</dd></div>
+      <div><dt>Formato</dt><dd>{{ report.format }}</dd></div>
+      <div><dt>Plantilla</dt><dd>{{ report.template }}</dd></div>
+      <div><dt>Idioma</dt><dd>{{ report.language }}</dd></div>
+      <div><dt>Clasificación</dt><dd>{{ report.options.get('classification', '—') }}</dd></div>
+      <div><dt>Cliente</dt><dd>{{ report.options.get('client_name', '—') }}</dd></div>
+      <div><dt>Generado</dt><dd>{{ report.created_at|datetimefmt }}</dd></div>
+    </dl>
+    {% if report.options.get('pdf_fallback') %}
+    <div class="flash flash-err">{{ icon('alert', 18) }} <span>Este informe se guardó como HTML porque no había motor PDF disponible. Instala Playwright o WeasyPrint para obtener PDF.</span></div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><span class="eyebrow">Vista previa</span><h2>Documento</h2></div><a class="link" href="/reports/{{ report.id }}/preview" target="_blank" rel="noopener">Abrir en pestaña {{ icon('external', 14) }}</a></div>
+    {% if exists %}
+      {% if report.format == 'pdf' %}
+      <iframe class="report-frame" src="/reports/{{ report.id }}/preview" title="Vista previa del informe"></iframe>
+      {% elif report.format == 'html' %}
+      <iframe class="report-frame" src="/reports/{{ report.id }}/preview" title="Vista previa del informe"></iframe>
+      {% else %}
+      <p class="muted">La vista previa integrada está disponible para PDF y HTML. Descarga el archivo para revisar este formato.</p>
+      {% endif %}
+    {% else %}
+      <div class="flash flash-err">{{ icon('alert', 18) }} <span>El archivo ya no existe en disco. Vuelve a generar el informe.</span></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

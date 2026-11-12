@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Nuevo informe · MarlonTheBug{% endblock %}
+{% block page_title %}Nuevo informe{% endblock %}
+{% block page_subtitle %}Selecciona alcance, plantilla y formato de entrega{% endblock %}
+
+{% block content %}
+{% if not workspaces %}
+  <div class="card"><h2>Crea un proyecto primero</h2><p class="muted">Los informes se generan a partir de los hallazgos de un proyecto.</p><a class="btn btn-primary" href="/workspaces">{{ icon('plus', 16) }} Crear proyecto</a></div>
+{% else %}
+<form method="post" action="/reports" class="report-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="workspace_id" value="{{ workspace_id }}">
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head"><div><span class="eyebrow">Alcance</span><h2>Proyecto y análisis</h2></div></div>
+      <label class="field">
+        <span>Análisis incluido</span>
+        <select name="scan_run_id">
+          <option value="">Todos los hallazgos del proyecto</option>
+          {% for scan in scans %}
+          <option value="{{ scan.id }}" {% if selected_scan_id == scan.id %}selected{% endif %}>{{ scan.created_at|datetimefmt }} · {{ scan.profile }} · {{ scan.targets|join(', ') }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Título del informe</span><input type="text" name="title" value="Informe de seguridad — {{ current_workspace.name if current_workspace else '' }}"></label>
+      <label class="field"><span>Cliente</span><input type="text" name="client_name" value="{{ current_workspace.client_name if current_workspace else '' }}" placeholder="Nombre del cliente"></label>
+      <label class="field"><span>Clasificación</span><input type="text" name="classification" value="{{ report_defaults.classification }}"></label>
+      <label class="field"><span>Empresa / auditor</span><input type="text" name="company" value="{{ report_defaults.company }}"></label>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div><span class="eyebrow">Entrega</span><h2>Plantilla y formato</h2></div></div>
+      <div class="template-grid">
+        <label class="template-card">
+          <input type="radio" name="template" value="full" {% if report_defaults.template == 'full' %}checked{% endif %}>
+          <span class="template-body"><span class="template-icon">{{ icon('book', 20) }}</span><strong>Completo</strong><small>Resumen ejecutivo + detalle técnico + anexos.</small></span>
+        </label>
+        <label class="template-card">
+          <input type="radio" name="template" value="executive" {% if report_defaults.template == 'executive' %}checked{% endif %}>
+          <span class="template-body"><span class="template-icon">{{ icon('shield', 20) }}</span><strong>Ejecutivo</strong><small>Riesgo, prioridades y recomendaciones de negocio.</small></span>
+        </label>
+        <label class="template-card">
+          <input type="radio" name="template" value="technical" {% if report_defaults.template == 'technical' %}checked{% endif %}>
+          <span class="template-body"><span class="template-icon">{{ icon('cpu', 20) }}</span><strong>Técnico</strong><small>Evidencia, requests, CVSS y remediación detallada.</small></span>
+        </label>
+      </div>
+      <div class="form-grid-2">
+        <label class="field"><span>Formato</span>
+          <select name="format">
+            <option value="pdf">PDF</option>
+            <option value="html">HTML</option>
+            <option value="markdown">Markdown</option>
+            <option value="json">JSON</option>
+          </select>
+        </label>
+        <label class="field"><span>Idioma</span>
+          <select name="language">
+            <option value="es" {% if report_defaults.language == 'es' %}selected{% endif %}>Español</option>
+            <option value="en" {% if report_defaults.language == 'en' %}selected{% endif %}>English</option>
+          </select>
+        </label>
+      </div>
+      <div class="check-list">
+        <label class="check"><input type="checkbox" name="include_evidence" {% if report_defaults.include_evidence %}checked{% endif %}><span>Incluir evidencia técnica</span></label>
+        <label class="check"><input type="checkbox" name="include_remediation" {% if report_defaults.include_remediation %}checked{% endif %}><span>Incluir remediación</span></label>
+        <label class="check"><input type="checkbox" name="include_waf_rules" {% if report_defaults.include_waf_rules %}checked{% endif %}><span>Incluir reglas WAF</span></label>
+      </div>
+      <p class="hint">El PDF se renderiza con Chrome/Edge o WeasyPrint si están disponibles. Si no, se entrega HTML autocontenido listo para imprimir.</p>
+    </section>
+  </div>
+
+  <div class="form-actions">
+    <a class="btn btn-ghost" href="/reports">Cancelar</a>
+    <button class="btn btn-primary" type="submit">{{ icon('file', 17) }} Generar informe</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

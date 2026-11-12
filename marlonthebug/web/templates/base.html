@@ -1,0 +1,88 @@
+{% from "_macros.html" import icon, flash_messages %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}MarlonTheBug{% endblock %}</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="/">
+      <img src="/static/img/logo.svg" alt="" width="34" height="34">
+      <span class="brand-text">
+        <strong>MarlonTheBug</strong>
+        <small>Security Platform</small>
+      </span>
+    </a>
+    <nav class="nav">
+      <span class="nav-section">Operación</span>
+      <a class="nav-item {% if nav == 'dashboard' %}active{% endif %}" href="/">{{ icon('dashboard') }}<span>Dashboard</span></a>
+      <a class="nav-item {% if nav == 'workspaces' %}active{% endif %}" href="/workspaces">{{ icon('folder') }}<span>Proyectos</span></a>
+      <a class="nav-item {% if nav == 'scans' %}active{% endif %}" href="/scans">{{ icon('radar') }}<span>Análisis</span></a>
+      <a class="nav-item {% if nav == 'findings' %}active{% endif %}" href="/findings">{{ icon('bug') }}<span>Hallazgos</span></a>
+      <a class="nav-item {% if nav == 'assets' %}active{% endif %}" href="/assets">{{ icon('server') }}<span>Activos</span></a>
+      <span class="nav-section">Entrega</span>
+      <a class="nav-item {% if nav == 'reports' %}active{% endif %}" href="/reports">{{ icon('file') }}<span>Informes</span></a>
+      <a class="nav-item {% if nav == 'intel' %}active{% endif %}" href="/intel">{{ icon('shield') }}<span>Inteligencia</span><span class="nav-pulse" title="KEV / EPSS"></span></a>
+      <span class="nav-section">Sistema</span>
+      <a class="nav-item {% if nav == 'settings' %}active{% endif %}" href="/settings">{{ icon('settings') }}<span>Configuración</span></a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="scope-pill">
+        <span class="dot"></span>
+        <span>Entorno local</span>
+      </div>
+      <small>v{{ app_version }} · uso autorizado</small>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn mobile-menu" type="button" data-sidebar-toggle aria-label="Menú">{{ icon('menu') }}</button>
+      <div class="page-head">
+        <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+        <p>{% block page_subtitle %}Postura de seguridad y actividad reciente{% endblock %}</p>
+      </div>
+      <div class="topbar-actions">
+        {% if workspaces %}
+        <label class="workspace-switch">
+          <span>Proyecto</span>
+          <select onchange="if(this.value){location.href='?workspace='+encodeURIComponent(this.value)}else{location.href='{{ request.url.path }}'}">
+            {% if not current_workspace or request.url.path not in ['/findings','/scans','/assets','/reports'] %}
+            <option value="" {% if not current_workspace %}selected{% endif %}>Todos</option>
+            {% endif %}
+            {% for workspace in workspaces %}
+            <option value="{{ workspace.id }}" {% if current_workspace and current_workspace.id == workspace.id %}selected{% endif %}>{{ workspace.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        {% block topbar_actions %}{% endblock %}
+        <a class="btn btn-primary" href="/scans/new{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">
+          {{ icon('plus', 17) }} Nuevo análisis
+        </a>
+        <form method="post" action="/logout" class="inline-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="icon-btn" type="submit" title="Cerrar sesión">{{ icon('lock', 17) }}</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content">
+      {{ flash_messages(flash_ok, flash_err) }}
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">
+      <span>MarlonTheBug v{{ app_version }}</span>
+      <span>Herramienta de auditoría para sistemas propios o con autorización expresa.</span>
+    </footer>
+  </div>
+</div>
+<script src="/static/js/app.js" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

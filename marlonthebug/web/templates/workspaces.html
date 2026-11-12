@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, severity_bar, empty_state %}
+{% block title %}Proyectos · MarlonTheBug{% endblock %}
+{% block page_title %}Proyectos{% endblock %}
+{% block page_subtitle %}Alcance, activos y hallazgos agrupados por auditoría{% endblock %}
+
+{% block content %}
+<div class="grid-aside">
+  <section class="stack">
+    {% if workspace_cards %}
+      {% for card in workspace_cards %}
+      <a class="project-card" href="/workspaces/{{ card.workspace.id }}">
+        <div class="project-head">
+          <div class="project-avatar">{{ card.workspace.name[:2]|upper }}</div>
+          <div class="project-title">
+            <h3>{{ card.workspace.name }}</h3>
+            <p>{{ card.workspace.client_name or 'Sin cliente definido' }}</p>
+          </div>
+          <span class="project-total">{{ card.stats.total }} hallazgos</span>
+        </div>
+        <div class="project-meta">
+          <span>{{ icon('server', 14) }} {{ card.workspace.targets|length }} activos</span>
+          <span>{{ icon('radar', 14) }} {{ card.stats.scans }} análisis</span>
+          <span>{{ icon('file', 14) }} {{ card.stats.reports }} informes</span>
+          <span class="scope-state {{ 'on' if card.workspace.allow_exploitation else 'off' }}">
+            Explotación {{ 'activa' if card.workspace.allow_exploitation else 'desactivada' }}
+          </span>
+        </div>
+        <div class="project-severity">
+          {% for severity in severity_order %}
+            {{ severity_bar(severity, card.stats.severity) }}
+          {% endfor %}
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      {{ empty_state('Todavía no hay proyectos', 'Crea un proyecto, define el alcance autorizado y añade los primeros dominios o IPs.', 'folder') }}
+    {% endif %}
+  </section>
+
+  <aside class="card sticky">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow">Nuevo</span>
+        <h2>Crear proyecto</h2>
+      </div>
+    </div>
+    <form method="post" action="/workspaces" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">
+        <span>Nombre del proyecto *</span>
+        <input type="text" name="name" required placeholder="acme-audit-2026" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Cliente</span>
+        <input type="text" name="client_name" placeholder="Acme S.L." autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Descripción</span>
+        <textarea name="description" rows="3" placeholder="Alcance, ventana de pruebas, contacto..."></textarea>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="allow_exploitation">
+        <span>Permitir módulos de explotación</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="skip_confirmation">
+        <span>Omitir confirmación interactiva</span>
+      </label>
+      <button class="btn btn-primary btn-block" type="submit">{{ icon('plus', 17) }} Crear proyecto</button>
+    </form>
+    <p class="hint">Solo debes analizar sistemas propios o con autorización escrita. El panel registra cada acción.</p>
+  </aside>
+</div>
+{% endblock %}

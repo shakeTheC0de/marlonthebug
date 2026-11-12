@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, stat_card, empty_state %}
+{% block title %}Inteligencia · MarlonTheBug{% endblock %}
+{% block page_title %}Inteligencia de vulnerabilidades{% endblock %}
+{% block page_subtitle %}CVE, explotación real (KEV) y probabilidad (EPSS){% endblock %}
+
+{% block content %}
+{% if summary.offline %}
+<div class="flash flash-err">{{ icon('wifi', 18) }} <span>Modo offline activo. Se usa únicamente la caché local y los bundles importados.</span></div>
+{% endif %}
+
+<div class="stat-grid">
+  {{ stat_card('CVEs en caché', summary.stats.total, 'NVD, KEV y OSV', 'accent') }}
+  {{ stat_card('CISA KEV', summary.stats.kev, 'explotadas en el mundo real', 'danger') }}
+  {{ stat_card('Con EPSS', summary.stats.epss, 'probabilidad de explotación', 'warning') }}
+  {{ stat_card('Fichas NVD', summary.stats.nvd, 'detalle técnico consultado', 'default') }}
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="card-head">
+      <div><span class="eyebrow">Feeds</span><h2>Estado de sincronización</h2></div>
+      {% if syncing %}<span class="pill live"><span class="live-dot"></span> sincronizando</span>{% endif %}
+    </div>
+    <div class="table-wrap">
+      <table class="table compact">
+        <thead><tr><th>Feed</th><th>Estado</th><th>Registros</th><th>Última sync</th></tr></thead>
+        <tbody>
+        {% for feed in summary.feeds %}
+        <tr>
+          <td class="mono">{{ feed.name }}</td>
+          <td><span class="badge feed-{{ feed.status }}">{{ feed.status }}</span></td>
+          <td>{{ feed.count }}</td>
+          <td class="muted small">{{ feed.last_sync|relative_time if feed.last_sync else 'nunca' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="muted">Sin feeds sincronizados todavía.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-actions">
+      {% if not summary.offline %}
+      <form method="post" action="/intel/sync" class="inline-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn btn-primary btn-sm" type="submit" {% if syncing %}disabled{% endif %}>{{ icon('refresh', 15) }} Sincronizar KEV + EPSS</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/intel/export" class="inline-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn btn-ghost btn-sm" type="submit">{{ icon('download', 15) }} Exportar bundle</button>
+      </form>
+    </div>
+    <form method="post" action="/intel/import" enctype="multipart/form-data" class="inline-add">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="file" name="file" accept="application/json" required>
+      <button class="btn btn-ghost btn-sm" type="submit">{{ icon('file', 15) }} Importar bundle</button>
+    </form>
+    <p class="hint">Para entornos air-gapped: exporta el bundle desde un equipo conectado e impórtalo aquí. El panel funciona sin feeds, pero prioriza peor.</p>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div><span class="eyebrow">Consulta</span><h2>Buscar CVE</h2></div></div>
+    <form method="get" action="/intel/search" class="search-row">
+      <label class="search-box">{{ icon('search', 16) }}<input type="search" name="q" value="{{ query }}" placeholder="CVE-2025-…, nginx, WordPress…"></label>
+      <button class="btn btn-ghost" type="submit">Buscar</button>
+    </form>
+    {% if query %}
+      <div class="search-result-head"><span class="muted">{{ results|length }} resultados para “{{ query }}”</span><a class="link" href="/intel">Limpiar</a></div>
+      {% if results %}
+      <div class="cve-list">
+        {% for cve in results %}
+        <div class="cve-row">
+          <div class="cve-head">
+            <span class="mono cve-id">{{ cve.cve_id }}</span>
+            {% if cve.kev %}<span class="tag tag-kev">{{ icon('zap', 12) }} KEV</span>{% endif %}
+            <span class="badge badge-{{ cve.severity }}">{{ cve.severity|severity_label }}</span>
+            <span class="muted small">CVSS {{ '%.1f'|format(cve.cvss_score) if cve.cvss_score else '—' }}</span>
+            {% if cve.epss %}<span class="muted small">EPSS {{ '%.1f%%'|format(cve.epss * 100) }}</span>{% endif %}
+          </div>
+          <p class="cve-desc">{{ cve.description|truncate(240) }}</p>
+          <div class="cve-meta">
+            <span>{{ cve.published or 'sin fecha' }}</span>
+            {% for ref in cve.references[:2] %}<a class="link small" href="{{ ref.url if ref is mapping else ref }}" target="_blank" rel="noopener noreferrer">Referencia {{ icon('external', 12) }}</a>{% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+        <p class="muted">Sin coincidencias en la caché local. Sincroniza los feeds o consulta una CVE concreta para forzar la descarga desde NVD.</p>
+      {% endif %}
+    {% else %}
+      <div class="intel-explainer">
+        <div class="explain-item"><span class="explain-icon">{{ icon('zap', 18) }}</span><div><strong>KEV</strong><p>Vulnerabilidades que ya se explotan activamente. Prioridad máxima.</p></div></div>
+        <div class="explain-item"><span class="explain-icon">{{ icon('chart', 18) }}</span><div><strong>EPSS</strong><p>Probabilidad estimada de explotación en los próximos 30 días.</p></div></div>
+        <div class="explain-item"><span class="explain-icon">{{ icon('database', 18) }}</span><div><strong>NVD / OSV</strong><p>Detalle técnico, CVSS, CWE y versiones afectadas.</p></div></div>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <div><span class="eyebrow">Prioridad</span><h2>Explotadas en el mundo real</h2></div>
+    <a class="link" href="/intel/search?q=KEV">Ver catálogo {{ icon('chevron', 14) }}</a>
+  </div>
+  {% if kev %}
+  <div class="table-wrap">
+    <table class="table compact">
+      <thead><tr><th>CVE</th><th>Producto</th><th>CVSS</th><th>EPSS</th><th>Fecha KEV</th><th>Descripción</th></tr></thead>
+      <tbody>
+      {% for cve in kev %}
+      <tr>
+        <td class="mono"><a class="link" href="/intel/search?q={{ cve.cve_id }}">{{ cve.cve_id }}</a></td>
+        <td>{% for item in cve.affected[:1] %}{{ item.get('product', '—') }}{% endfor %}</td>
+        <td class="mono">{{ '%.1f'|format(cve.cvss_score) if cve.cvss_score else '—' }}</td>
+        <td class="mono">{{ '%.1f%%'|format(cve.epss * 100) if cve.epss else '—' }}</td>
+        <td class="muted small">{{ cve.kev_due_date or '—' }}</td>
+        <td class="muted small">{{ cve.title|truncate(90) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty_state('Catálogo KEV vacío', 'Sincroniza la inteligencia o importa un bundle para ver las vulnerabilidades explotadas en el mundo real.', 'shield') }}
+  {% endif %}
+</section>
+{% endblock %}

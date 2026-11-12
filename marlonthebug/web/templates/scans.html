@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, scan_status_badge, empty_state %}
+{% block title %}Análisis · MarlonTheBug{% endblock %}
+{% block page_title %}Análisis{% endblock %}
+{% block page_subtitle %}Historial de ejecuciones, estado y cobertura{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-info">
+    <span class="pill">{{ scans|length }} ejecuciones</span>
+    {% if current_workspace %}<span class="muted">{{ current_workspace.name }}</span>{% endif %}
+  </div>
+  <a class="btn btn-primary" href="/scans/new{% if current_workspace %}?workspace={{ current_workspace.id }}{% endif %}">{{ icon('plus', 17) }} Nuevo análisis</a>
+</div>
+
+{% if scans %}
+<div class="card no-pad">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Estado</th><th>Perfil</th><th>Objetivos</th><th>Categorías</th><th>Hallazgos</th><th>Inicio</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for scan in scans %}
+      <tr>
+        <td>{{ scan_status_badge(scan.status) }}{% if running.get(scan.id) %}<span class="live-dot" title="En ejecución"></span>{% endif %}</td>
+        <td><span class="pill">{{ scan.profile }}</span></td>
+        <td class="mono small">{{ scan.targets|join(', ') if scan.targets else '—' }}</td>
+        <td>{% for category in scan.categories %}<span class="tag">{{ category }}</span>{% endfor %}</td>
+        <td><strong>{{ scan.stats.get('findings', 0) }}</strong>{% if scan.stats.get('requests') %}<span class="muted small"> · {{ scan.stats.get('requests') }} req</span>{% endif %}</td>
+        <td class="muted small">{{ scan.created_at|datetimefmt }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/scans/{{ scan.id }}">Abrir {{ icon('chevron', 14) }}</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+  {{ empty_state('Sin análisis ejecutados', 'Define un proyecto y lanza el primer análisis. Empieza por un perfil seguro para validar el alcance.', 'radar') }}
+{% endif %}
+{% endblock %}
