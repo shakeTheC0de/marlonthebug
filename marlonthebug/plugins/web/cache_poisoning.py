@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from marlonthebug.http.client import AsyncHTTPClient
@@ -32,6 +32,7 @@ class CachePoisoningAuditor(BasePlugin):
         options = options or {}
         base_url = str(options.get("base_url") or f"https://{target.host}").rstrip("/")
         endpoints = [base_url, *list(options.get("endpoints") or [])[:10]]
+        baseline = options.get("baseline")
         http = AsyncHTTPClient(follow_redirects=False)
         canary = f"mtb-{secrets.token_hex(4)}.example"
         header_tests = {
@@ -53,11 +54,11 @@ class CachePoisoningAuditor(BasePlugin):
                         response = await http.get(test_url, headers={header: value})
                     except Exception:
                         continue
+                    if baseline and baseline.looks_like_app_shell(response):
+                        continue
                     reflected = canary in response.body or canary in str(response.headers)
-                    cached = any(response.header(name) for name in CACHE_HEADERS)
-                    if header.startswith("X-Original") and response.status_code == 200:
-                        reflected = True
-                    if not reflected:
+                    cached = _is_cached(response)
+                    if not reflected and not cached:
                         continue
                     yield self.create_finding(
                         title=f"Posible cache poisoning mediante {header}",
@@ -65,9 +66,9 @@ class CachePoisoningAuditor(BasePlugin):
                             f"La cabecera {header} se refleja en la respuesta y hay indicios de caché compartida. "
                             "Si el proxy cachea la variante, un atacante podría envenenar contenido para otros usuarios."
                         ),
-                        severity=Severity.MEDIUM if cached else Severity.LOW,
-                        cvss_score=6.1 if cached else 3.7,
-                        confidence=Confidence.MEDIUM if cached else Confidence.LOW,
+                        severity=Severity.MEDIUM if (cached and reflected) else Severity.LOW,
+                        cvss_score=6.1 if (cached and reflected) else 3.7,
+                        confidence=Confidence.MEDIUM if (cached and reflected) else Confidence.LOW,
                         cwe="CWE-444",
                         owasp="A05:2021 Security Misconfiguration",
                         endpoint=url,
@@ -89,6 +90,20 @@ class CachePoisoningAuditor(BasePlugin):
                     )
         finally:
             await http.close()
+
+
+def _is_cached(response: Any) -> bool:
+    cf = response.header("cf-cache-status").lower()
+    if cf in {"hit", "miss", "expired", "stale", "revalidated"}:
+        return True
+    xcache = response.header("x-cache").lower()
+    if "hit" in xcache or "miss" in xcache:
+        return True
+    age = response.header("age")
+    try:
+        return bool(age) and int(age) > 0
+    except ValueError:
+        return False
 
 
 def _with_cache_buster(url: str) -> str:

@@ -112,7 +112,7 @@ SECRET_RULES: list[dict] = [
     },
     {
         "name": ".env File",
-        "pattern": r"(?i)([A-Z_]{3,30})\s*=\s*['\"]?([^'\"\s]{6,})['\"]?",
+        "pattern": r"(?m)^([A-Z][A-Z0-9_]{2,30})\s*=\s*['\"]?([^'\"\s]{6,})['\"]?\s*$",
         "severity": Severity.MEDIUM,
         "cvss": 5.0,
     },
