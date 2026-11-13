@@ -10,7 +10,7 @@
 | 3. Informes | ✅ | PDF/HTML/Markdown/JSON, plantillas ES/EN, evidencia, CVSS, CWE, OWASP |
 | 4. Fiabilidad | ✅ | Scope guard fail-closed, baseline/soft-404, HTTP compartido, rate limit, dedupe |
 | 5. Inteligencia | ✅ | CISA KEV, EPSS, NVD, OSV, caché local, bundles offline |
-| 6. Módulos modernos | ✅ | JWT, OAuth, BOLA/IDOR, mass assignment, GraphQL, prototype pollution, cache poisoning, supply chain, LLM |
+| 6. Módulos modernos | ✅ | JWT, OAuth, BOLA/IDOR, mass assignment, GraphQL, prototype pollution, cache poisoning, supply chain, cloud dashboards, CI/CD, LLM |
 | 7. Portabilidad | ✅ | `--portable`, datos fuera del repo, Docker, PyInstaller en CI, README |
 
 ## Principios
