@@ -15,6 +15,7 @@ from marlonthebug.db.models import (
     AssetIntelModel,
     AuditLogModel,
     CveModel,
+    ExploitRunModel,
     FindingModel,
     IntelFeedModel,
     ReportModel,
@@ -486,7 +487,10 @@ class Repository:
         async with self.db.session() as session:
             statement = (
                 select(FindingModel)
-                .options(selectinload(FindingModel.target))
+                .options(
+                    selectinload(FindingModel.target),
+                    selectinload(FindingModel.workspace),
+                )
                 .order_by(SEVERITY_ORDER, FindingModel.cvss_score.desc())
                 .limit(max(1, min(limit, 20000)))
             )
@@ -514,6 +518,81 @@ class Repository:
                 return False
             await session.delete(finding)
             return True
+
+    # ── Exploitation ────────────────────────────────────────
+
+    async def create_exploit_run(
+        self,
+        workspace_id: str,
+        finding_id: str,
+        module_name: str,
+        module_category: str = "webapp",
+        risk: str = "medium",
+        payload: dict | None = None,
+        operator: str = "panel",
+        target_id: str | None = None,
+    ) -> ExploitRunModel:
+        async with self.db.session() as session:
+            run = ExploitRunModel(
+                workspace_id=workspace_id,
+                finding_id=finding_id,
+                target_id=target_id,
+                module_name=module_name,
+                module_category=module_category,
+                risk=risk,
+                payload=payload or {},
+                operator=operator,
+                status="running",
+            )
+            session.add(run)
+            await session.flush()
+            return run
+
+    async def update_exploit_run(self, run_id: str, **fields: Any) -> ExploitRunModel | None:
+        async with self.db.session() as session:
+            run = await session.get(ExploitRunModel, run_id)
+            if not run:
+                return None
+            for key, value in fields.items():
+                if hasattr(run, key):
+                    setattr(run, key, value)
+            return run
+
+    async def get_exploit_run(self, run_id: str) -> ExploitRunModel | None:
+        async with self.db.session() as session:
+            result = await session.execute(
+                select(ExploitRunModel)
+                .options(
+                    selectinload(ExploitRunModel.finding),
+                    selectinload(ExploitRunModel.workspace),
+                    selectinload(ExploitRunModel.target),
+                )
+                .where(ExploitRunModel.id == run_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def list_exploit_runs(
+        self,
+        workspace_id: str | None = None,
+        finding_id: str | None = None,
+        limit: int = 100,
+    ) -> list[ExploitRunModel]:
+        async with self.db.session() as session:
+            statement = (
+                select(ExploitRunModel)
+                .options(
+                    selectinload(ExploitRunModel.finding),
+                    selectinload(ExploitRunModel.workspace),
+                )
+                .order_by(ExploitRunModel.created_at.desc())
+                .limit(limit)
+            )
+            if workspace_id:
+                statement = statement.where(ExploitRunModel.workspace_id == workspace_id)
+            if finding_id:
+                statement = statement.where(ExploitRunModel.finding_id == finding_id)
+            result = await session.execute(statement)
+            return list(result.scalars().all())
 
     # ── Dashboard / statistics ──────────────────────────────
 

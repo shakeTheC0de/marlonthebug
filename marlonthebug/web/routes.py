@@ -21,12 +21,14 @@ from fastapi.responses import (
 )
 
 from marlonthebug.db.models import ScanRunModel
+from marlonthebug.services.exploitation import ExploitBlocked
 from marlonthebug.services.reports import ReportRequest
 from marlonthebug.services.scanner import PROFILES
 from marlonthebug.settings import save_settings
 from marlonthebug.web import serializers
 from marlonthebug.web.deps import (
     get_auth,
+    get_exploitation,
     get_intel,
     get_paths,
     get_repo,
@@ -559,9 +561,12 @@ async def export_findings(request: Request):
 
 @router.get("/findings/{finding_id}", response_class=HTMLResponse)
 async def finding_detail(request: Request, finding_id: str):
-    finding = await get_repo(request).get_finding(finding_id)
+    repo = get_repo(request)
+    finding = await repo.get_finding(finding_id)
     if not finding:
         raise HTTPException(404, "Hallazgo no encontrado")
+    modules = await get_exploitation(request).available_modules(finding)
+    exploit_runs = await repo.list_exploit_runs(finding_id=finding.id, limit=10)
     return await render(
         request,
         "finding_detail.html",
@@ -569,6 +574,9 @@ async def finding_detail(request: Request, finding_id: str):
         workspace_id=finding.workspace_id,
         finding=finding,
         statuses_available=STATUSES,
+        exploit_modules=modules,
+        exploit_runs=exploit_runs,
+        allow_exploitation=bool(finding.workspace and finding.workspace.allow_exploitation),
     )
 
 
@@ -603,6 +611,64 @@ async def delete_finding(request: Request, finding_id: str):
         await repo.delete_finding(finding_id)
         await repo.log_action("finding.delete", target=finding.target_host, detail={"finding_id": finding_id})
     return redirect_with("/findings", ok="Hallazgo eliminado")
+
+
+# ── Exploitation ───────────────────────────────────────────
+
+
+@router.get("/exploits", response_class=HTMLResponse)
+async def exploits_page(request: Request):
+    repo = get_repo(request)
+    workspace_id = request.query_params.get("workspace") or None
+    if not workspace_id:
+        workspaces = await repo.list_workspaces()
+        workspace_id = workspaces[0].id if workspaces else None
+    exploitable = await get_exploitation(request).list_exploitable(workspace_id) if workspace_id else []
+    runs = await repo.list_exploit_runs(workspace_id, limit=50)
+    return await render(
+        request,
+        "exploits.html",
+        nav="exploits",
+        workspace_id=workspace_id,
+        exploitable=exploitable,
+        runs=runs,
+    )
+
+
+@router.get("/exploits/{run_id}", response_class=HTMLResponse)
+async def exploit_detail(request: Request, run_id: str):
+    run = await get_repo(request).get_exploit_run(run_id)
+    if not run:
+        raise HTTPException(404, "Ejecución de explotación no encontrada")
+    return await render(
+        request,
+        "exploit_detail.html",
+        nav="exploits",
+        workspace_id=run.workspace_id,
+        run=run,
+    )
+
+
+@router.post("/findings/{finding_id}/exploit")
+async def run_exploit(request: Request, finding_id: str):
+    form = await request.form()
+    require_csrf(request, form)
+    module_key = str(form.get("module", ""))
+    confirm_text = str(form.get("confirm_text", ""))
+    try:
+        run = await get_exploitation(request).run(
+            finding_id=finding_id,
+            module_key=module_key,
+            confirm_text=confirm_text,
+            operator="panel",
+        )
+    except ExploitBlocked as exc:
+        return redirect_with(f"/findings/{finding_id}", err=str(exc))
+    if run.status == "success":
+        return redirect_with(f"/exploits/{run.id}", ok="Explotación confirmada y evidenciada")
+    if run.status == "not_applicable":
+        return redirect_with(f"/exploits/{run.id}", err="El módulo no encontró condiciones para explotar")
+    return redirect_with(f"/exploits/{run.id}", err="La explotación no pudo confirmarse")
 
 
 # ── Assets ────────────────────────────────────────────────

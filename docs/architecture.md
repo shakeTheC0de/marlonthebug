@@ -54,6 +54,7 @@ POST /scans
 | `scan_runs` | Ejecuciones, perfil, opciones, estado, estadísticas y logs |
 | `findings` | Hallazgos deduplicados, CVSS, CWE, OWASP, confianza, estado, evidencia, KEV/EPSS |
 | `reports` | Entregables generados y metadatos |
+| `exploit_runs` | Ejecuciones de explotación controlada, payload, salida y evidencia |
 | `audit_log` | Acciones sensibles |
 | `intel_feeds` | Estado de KEV, EPSS, NVD y OSV |
 | `cves` | Caché local de vulnerabilidades |
@@ -84,6 +85,18 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
 - **NVD**: consulta bajo demanda para detalle técnico.
 - **OSV**: consulta por ecosistema/paquete/versión desde supply chain.
 - **Offline**: exportación/importación de bundles JSON.
+
+## Explotación controlada
+
+`ExploitationService` es el único punto de entrada. Antes de ejecutar un módulo comprueba:
+
+1. Que el proyecto tenga `allow_exploitation=True`.
+2. Que el hallazgo no esté marcado como falso positivo.
+3. Que el operador escriba `EXPLOTAR`.
+4. Que el endpoint siga dentro del scope.
+5. Que el módulo esté mapeado al plugin del hallazgo.
+
+Cada ejecución se registra en `exploit_runs` y en el audit log. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
 
 ## Portabilidad
 

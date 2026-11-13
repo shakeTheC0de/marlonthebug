@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from marlonthebug.db.repository import Repository
 from marlonthebug.paths import AppPaths
 from marlonthebug.plugins.registry import PluginRegistry
+from marlonthebug.services.exploitation import ExploitationService
 from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportService
 from marlonthebug.services.scanner import ScanManager
@@ -42,6 +43,10 @@ def get_intel(request: Request) -> IntelService:
 
 def get_reports(request: Request) -> ReportService:
     return request.app.state.report_service
+
+
+def get_exploitation(request: Request) -> ExploitationService:
+    return request.app.state.exploitation
 
 
 def get_templates(request: Request) -> Jinja2Templates:

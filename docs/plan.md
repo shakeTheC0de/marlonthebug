@@ -12,6 +12,7 @@
 | 5. Inteligencia | ✅ | CISA KEV, EPSS, NVD, OSV, caché local, bundles offline |
 | 6. Módulos modernos | ✅ | JWT, OAuth, BOLA/IDOR, mass assignment, GraphQL, prototype pollution, cache poisoning, supply chain, cloud dashboards, CI/CD, LLM |
 | 7. Portabilidad | ✅ | `--portable`, datos fuera del repo, Docker, PyInstaller en CI, README |
+| 8. Explotación controlada | ✅ | SQLi, XSS, LFI, RCE, SSTI, SSRF, open redirect; confirmación tipada, evidencia y audit log |
 
 ## Principios
 

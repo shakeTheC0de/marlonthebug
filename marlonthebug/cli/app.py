@@ -34,11 +34,13 @@ scan_app = typer.Typer(help="Ejecución de análisis", no_args_is_help=True)
 report_app = typer.Typer(help="Generación de informes", no_args_is_help=True)
 intel_app = typer.Typer(help="Inteligencia de vulnerabilidades", no_args_is_help=True)
 legacy_app = typer.Typer(help="Importación de datos de versiones anteriores", no_args_is_help=True)
+exploit_app = typer.Typer(help="Explotación controlada", no_args_is_help=True)
 cli.add_typer(workspace_app, name="workspace")
 cli.add_typer(scan_app, name="scan")
 cli.add_typer(report_app, name="report")
 cli.add_typer(intel_app, name="intel")
 cli.add_typer(legacy_app, name="legacy")
+cli.add_typer(exploit_app, name="exploit")
 
 console = Console()
 
@@ -530,6 +532,82 @@ async def _intel_import(path: str, data_dir: str | None) -> None:
         service = IntelService(repository, settings, paths)
         count = await service.import_bundle(Path(path).expanduser())
         console.print(f"[green]{count} CVEs importadas[/green]")
+    finally:
+        await database.close()
+
+
+@exploit_app.command("list")
+def exploit_list(
+    workspace_name: str = typer.Option(..., "--workspace", "-w"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Lista hallazgos con módulos de explotación disponibles."""
+
+    async def run() -> None:
+        from marlonthebug.services.exploitation import ExploitationService
+
+        paths = _paths(data_dir)
+        settings = load_settings(paths)
+        database, repository = await _repo(paths)
+        try:
+            workspace = await repository.get_workspace_by_name(workspace_name)
+            if not workspace:
+                console.print(f"[red]Proyecto no encontrado: {workspace_name}[/red]")
+                raise typer.Exit(1)
+            service = ExploitationService(repository, settings, paths)
+            rows = await service.list_exploitable(workspace.id)
+            table = Table(title=f"Explotables · {workspace.name}")
+            table.add_column("ID")
+            table.add_column("Severidad")
+            table.add_column("Hallazgo")
+            table.add_column("Módulos")
+            for finding, modules in rows:
+                table.add_row(
+                    finding.id[:8],
+                    finding.severity,
+                    finding.title[:70],
+                    ", ".join(module["key"] for module in modules),
+                )
+            console.print(table if rows else "No hay hallazgos explotables.")
+        finally:
+            await database.close()
+
+    asyncio.run(run())
+
+
+@exploit_app.command("run")
+def exploit_run(
+    finding_id: str = typer.Option(..., "--finding", "-f", help="ID del hallazgo"),
+    module: str = typer.Option(..., "--module", "-m", help="category/name del módulo"),
+    confirm_text: str = typer.Option(..., "--confirm-text", help="Escribe EXPLOTAR"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Ejecuta una explotación controlada y muestra la evidencia."""
+    asyncio.run(_exploit_run(finding_id, module, confirm_text, data_dir))
+
+
+async def _exploit_run(
+    finding_id: str,
+    module: str,
+    confirm_text: str,
+    data_dir: str | None,
+) -> None:
+    from marlonthebug.services.exploitation import ExploitationService, ExploitBlocked
+
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        service = ExploitationService(repository, settings, paths)
+        try:
+            run = await service.run(finding_id, module, confirm_text, operator="cli")
+        except ExploitBlocked as exc:
+            console.print(f"[red]Bloqueado:[/red] {exc}")
+            raise typer.Exit(1) from exc
+        console.print(f"[bold]Estado:[/bold] {run.status}")
+        console.print(run.output or run.error or "Sin salida")
+        if run.evidence:
+            console.print(run.evidence)
     finally:
         await database.close()
 

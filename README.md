@@ -17,6 +17,7 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 - **CLI** completa para automatizar y ejecutar en servidores.
 - **Persistencia SQLite** con deduplicación de hallazgos e histórico por proyecto.
 - **Informes** ejecutivos y técnicos en PDF, HTML, Markdown y JSON, en español e inglés.
+- **Explotación controlada** con evidencia: SQLi de solo lectura, XSS canario, LFI, RCE de prueba (`id`/`whoami`), SSTI, SSRF y open redirect. Sin shells inversas ni persistencia por defecto.
 - **Inteligencia de vulnerabilidades**: CISA KEV, EPSS, NVD y OSV con caché local y bundles para entornos air-gapped.
 - **Modo portable**: todos los datos en `./data`, ideal para USB.
 - **Sin CDN, sin telemetría y sin dependencias de servicios cloud**.
@@ -115,6 +116,8 @@ marlonthebug intel sync
 marlonthebug intel search CVE-2021-44228
 marlonthebug intel export --output intel-bundle.json
 marlonthebug legacy import --reports reports
+marlonthebug exploit list --workspace acme-audit
+marlonthebug exploit run --finding <id> --module webapp/xss_exploit --confirm-text EXPLOTAR
 ```
 
 ### Perfiles de análisis
@@ -157,6 +160,26 @@ MARLONTHEBUG_PORT=8765
 MARLONTHEBUG_OFFLINE=1
 NVD_API_KEY=...
 ```
+
+---
+
+## Explotación controlada
+
+La explotación no se ejecuta durante el escaneo. Se habilita por proyecto y requiere escribir `EXPLOTAR` en el panel (o pasar `--confirm-text EXPLOTAR` en CLI).
+
+| Módulo | Prueba de concepto | Riesgo |
+|---|---|---|
+| `webapp/sqli_exploit` | Versión/usuario/base de datos vía error SQL, solo lectura | Medio |
+| `webapp/xss_exploit` | Payload único y comprobación de reflejo ejecutable | Bajo |
+| `webapp/lfi_exploit` | Lectura de `/etc/passwd` o `win.ini` | Medio |
+| `webapp/rce_exploit` | `id`/`whoami` sin shell inversa ni persistencia | Alto |
+| `webapp/ssti_exploit` | Evaluación de `7*7` | Medio |
+| `webapp/ssrf_exploit` | Metadata cloud y loopback | Alto |
+| `webapp/open_redirect_exploit` | Redirección a destino canario | Bajo |
+
+Cada ejecución se guarda en `exploit_runs` con payload, salida, evidencia, operador y estado de limpieza. Si la prueba se confirma, el hallazgo pasa a **verificado** y **confirmado**.
+
+Solo debes usar estos módulos contra sistemas propios o con autorización escrita.
 
 ---
 

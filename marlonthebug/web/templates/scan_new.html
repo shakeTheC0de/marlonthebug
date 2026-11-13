@@ -98,7 +98,11 @@
   <section class="card">
     <div class="card-head">
       <div><span class="eyebrow">Paso 3</span><h2>Módulos</h2></div>
-      <span class="muted small">Si no seleccionas ninguno, se ejecutan todos los de las categorías marcadas.</span>
+      <div class="card-actions" style="margin:0">
+        <button class="btn btn-ghost btn-sm" type="button" data-select-modules="all">{{ icon('check', 14) }} Seleccionar todos</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-select-modules="none">{{ icon('x', 14) }} Limpiar</button>
+        <span class="muted small">Si no seleccionas ninguno, se ejecutan todos los de las categorías marcadas.</span>
+      </div>
     </div>
     <div class="module-groups">
       {% for category, items in plugin_groups.items() %}

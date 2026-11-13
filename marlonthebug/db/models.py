@@ -146,6 +146,9 @@ class FindingModel(Base):
     workspace: Mapped[WorkspaceModel] = relationship(back_populates="findings")
     scan_run: Mapped[ScanRunModel | None] = relationship(back_populates="findings")
     target: Mapped[TargetModel | None] = relationship(back_populates="findings")
+    exploit_runs: Mapped[list[ExploitRunModel]] = relationship(
+        back_populates="finding", cascade="all, delete-orphan", lazy="selectin"
+    )
 
 
 class ReportModel(Base):
@@ -167,6 +170,33 @@ class ReportModel(Base):
 
     workspace: Mapped[WorkspaceModel] = relationship(back_populates="reports")
     scan_run: Mapped[ScanRunModel | None] = relationship(back_populates="reports")
+
+
+class ExploitRunModel(Base):
+    __tablename__ = "exploit_runs"
+    __table_args__ = (Index("ix_exploits_workspace_created", "workspace_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"))
+    finding_id: Mapped[str] = mapped_column(ForeignKey("findings.id", ondelete="CASCADE"))
+    target_id: Mapped[str | None] = mapped_column(ForeignKey("targets.id", ondelete="SET NULL"), nullable=True)
+    module_name: Mapped[str] = mapped_column(String(120))
+    module_category: Mapped[str] = mapped_column(String(60), default="webapp")
+    risk: Mapped[str] = mapped_column(String(20), default="medium")
+    status: Mapped[str] = mapped_column(String(30), default="running", index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    output: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    operator: Mapped[str] = mapped_column(String(120), default="panel")
+    cleanup_status: Mapped[str] = mapped_column(String(30), default="not_required")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    finding: Mapped[FindingModel] = relationship(back_populates="exploit_runs")
+    workspace: Mapped[WorkspaceModel] = relationship()
+    target: Mapped[TargetModel | None] = relationship()
 
 
 class AuditLogModel(Base):

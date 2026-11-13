@@ -95,6 +95,62 @@
   </section>
 </div>
 
+{% if allow_exploitation %}
+<section class="card" style="margin-top:18px">
+  <div class="card-head">
+    <div><span class="eyebrow">Explotación controlada</span><h2>Validar impacto real</h2></div>
+    <span class="tag risk-high">Solo sistemas autorizados</span>
+  </div>
+  {% if exploit_modules %}
+  <p class="muted">Ejecuta una prueba de concepto con evidencia. El hallazgo se marcará como verificado si la explotación se confirma.</p>
+  <form method="post" action="/findings/{{ finding.id }}/exploit" class="stack" data-confirm="¿Ejecutar la explotación controlada contra {{ finding.target_host }}?">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid-2">
+      <label class="field"><span>Módulo</span>
+        <select name="module" required>
+          {% for module in exploit_modules %}
+          <option value="{{ module.key }}">{{ module.name }} · riesgo {{ module.risk }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Confirmación</span>
+        <input type="text" name="confirm_text" placeholder="Escribe EXPLOTAR" autocomplete="off" required>
+      </label>
+    </div>
+    <button class="btn btn-danger" type="submit">{{ icon('zap', 16) }} Ejecutar explotación</button>
+  </form>
+  {% else %}
+    <p class="muted">No hay un módulo de explotación mapeado para este plugin.</p>
+  {% endif %}
+
+  {% if exploit_runs %}
+  <h3 class="section-title">Ejecuciones anteriores</h3>
+  <div class="table-wrap">
+    <table class="table compact">
+      <thead><tr><th>Estado</th><th>Módulo</th><th>Riesgo</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+      {% for run in exploit_runs %}
+      <tr>
+        <td><span class="badge exploit-{{ run.status }}">{{ run.status }}</span></td>
+        <td class="mono small">{{ run.module_name }}</td>
+        <td><span class="tag risk-{{ run.risk }}">{{ run.risk }}</span></td>
+        <td class="muted small">{{ run.created_at|datetimefmt }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/exploits/{{ run.id }}">Evidencia</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% else %}
+<section class="card" style="margin-top:18px">
+  <div class="card-head"><div><span class="eyebrow">Explotación controlada</span><h2>Desactivada</h2></div></div>
+  <p class="muted">Activa «Permitir explotación» en el proyecto para validar el impacto real de este hallazgo.</p>
+  {% if finding.workspace %}<a class="btn btn-ghost" href="/workspaces/{{ finding.workspace.id }}">{{ icon('settings', 16) }} Configurar proyecto</a>{% endif %}
+</section>
+{% endif %}
+
 <div class="danger-zone">
   <div><h3>Eliminar hallazgo</h3><p>Úsalo solo si es ruido o un falso positivo que no quieres conservar en el histórico.</p></div>
   <form method="post" action="/findings/{{ finding.id }}/delete" data-confirm="¿Eliminar este hallazgo definitivamente?">

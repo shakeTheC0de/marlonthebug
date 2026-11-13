@@ -20,11 +20,13 @@ from marlonthebug.core.scope import ScopeConfig
 from marlonthebug.core.workspace import TargetInfo
 from marlonthebug.db.database import Database, sqlite_url
 from marlonthebug.db.repository import Repository, finding_fingerprint
+from marlonthebug.exploit.registry import ExploitRegistry
 from marlonthebug.http.baseline import BaselineProbe, BaselineSample, similarity
 from marlonthebug.paths import AppPaths
 from marlonthebug.plugins.api.jwt import JWTAuditor
 from marlonthebug.plugins.recon.endpoint_discovery import _content_is_valid
 from marlonthebug.plugins.recon.supply_chain import SupplyChainAuditor
+from marlonthebug.services.exploitation import ExploitationService, ExploitBlocked
 from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportRequest, ReportService
 from marlonthebug.services.scanner import ScanManager
@@ -330,3 +332,42 @@ async def test_scan_pipeline_against_local_server(app_paths: AppPaths) -> None:
     finally:
         await database.close()
         server.shutdown()
+
+
+def test_exploit_registry_maps_findings() -> None:
+    registry = ExploitRegistry()
+    registry.discover()
+    assert registry.for_plugin("sqli")
+    assert registry.for_plugin("xss")
+    assert registry.for_plugin("lfi_rfi")
+    assert not registry.for_plugin("tech_fingerprint")
+
+
+async def test_exploitation_requires_workspace_flag(app_paths: AppPaths) -> None:
+    database, repo = await _database(app_paths)
+    try:
+        settings = load_settings(app_paths)
+        workspace = await repo.create_workspace("exploit-blocked", allow_exploitation=False)
+        target = await repo.add_target(workspace.id, "example.com")
+        finding, _ = await repo.upsert_finding(
+            {
+                "workspace_id": workspace.id,
+                "target_id": target.id,
+                "plugin_name": "xss",
+                "category": "web",
+                "title": "XSS de prueba",
+                "description": "test",
+                "severity": "high",
+                "endpoint": "https://example.com/?q=test",
+                "target_host": "example.com",
+                "evidence": {"parameter": "q"},
+                "fingerprint": finding_fingerprint(
+                    "xss", "XSS de prueba", "https://example.com/?q=test", "example.com", "q"
+                ),
+            }
+        )
+        service = ExploitationService(repo, settings, app_paths)
+        with pytest.raises(ExploitBlocked):
+            await service.run(finding.id, "webapp/xss_exploit", "EXPLOTAR")
+    finally:
+        await database.close()

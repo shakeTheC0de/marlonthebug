@@ -82,7 +82,20 @@ marlonthebug intel import bundle.json
 
 En **Activos** puedes ver tecnologías, puertos y hallazgos por host. El botón **Buscar CVEs** correlaciona las tecnologías detectadas con la caché local.
 
-## 8. CLI
+## 8. Explotación controlada
+
+La explotación se habilita por proyecto. En **Proyectos → Alcance**, activa **Permitir explotación**. Después:
+
+1. Abre un hallazgo con módulo mapeado.
+2. En **Explotación controlada**, elige el módulo.
+3. Escribe `EXPLOTAR` y ejecuta.
+4. Revisa la evidencia en la pantalla de la ejecución.
+
+Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de ficheros de prueba, RCE con `id`/`whoami`, SSTI `7*7`, SSRF a metadata/loopback y open redirect canario. No hay shells inversas ni persistencia por defecto.
+
+En el formulario de análisis, **Seleccionar todos** marca todos los módulos; **Limpiar** los desmarca.
+
+## 9. CLI
 
 ```bash
 marlonthebug workspace list
@@ -93,7 +106,7 @@ marlonthebug intel sync
 marlonthebug legacy import --reports reports
 ```
 
-## 9. Datos y backup
+## 10. Datos y backup
 
 Todo vive en el directorio de datos. Para hacer backup:
 
@@ -113,7 +126,7 @@ marlonthebug panel --portable
 
 Nunca copies `panel.token` a un repositorio ni lo compartas.
 
-## 10. Solución de problemas
+## 11. Solución de problemas
 
 | Problema | Solución |
 |---|---|

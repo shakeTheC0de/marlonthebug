@@ -152,4 +152,14 @@
       search.focus();
     }
   });
+
+  // Select all/clear module checkboxes in the scan form
+  document.querySelectorAll("[data-select-modules]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.getAttribute("data-select-modules");
+      document.querySelectorAll('input[name="modules"]').forEach((checkbox) => {
+        checkbox.checked = mode === "all";
+      });
+    });
+  });
 })();
