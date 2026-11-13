@@ -31,6 +31,8 @@ from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportRequest, ReportService
 from marlonthebug.services.scanner import ScanManager
 from marlonthebug.settings import load_settings
+from marlonthebug.tools.catalog import tools_for_plugin
+from marlonthebug.tools.docker_runner import docker_url
 from marlonthebug.web.app import create_app
 
 
@@ -341,6 +343,15 @@ def test_exploit_registry_maps_findings() -> None:
     assert registry.for_plugin("xss")
     assert registry.for_plugin("lfi_rfi")
     assert not registry.for_plugin("tech_fingerprint")
+
+
+def test_tool_catalog_and_docker_url() -> None:
+    sqli_tools = {tool.key for tool in tools_for_plugin("sqli")}
+    assert {"sqlmap", "nuclei"}.issubset(sqli_tools)
+    assert "nuclei" in {tool.key for tool in tools_for_plugin("xss")}
+    assert tools_for_plugin("secret_finder") == []
+    assert docker_url("http://127.0.0.1:8080/app?q=1") == "http://host.docker.internal:8080/app?q=1"
+    assert docker_url("https://example.com") == "https://example.com"
 
 
 async def test_exploitation_requires_workspace_flag(app_paths: AppPaths) -> None:

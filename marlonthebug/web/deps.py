@@ -18,6 +18,7 @@ from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportService
 from marlonthebug.services.scanner import ScanManager
 from marlonthebug.settings import AppSettings
+from marlonthebug.tools.service import ToolService
 from marlonthebug.web.security import PanelAuth
 
 
@@ -47,6 +48,10 @@ def get_reports(request: Request) -> ReportService:
 
 def get_exploitation(request: Request) -> ExploitationService:
     return request.app.state.exploitation
+
+
+def get_tools(request: Request) -> ToolService:
+    return request.app.state.tools
 
 
 def get_templates(request: Request) -> Jinja2Templates:

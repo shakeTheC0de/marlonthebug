@@ -95,7 +95,19 @@ Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de 
 
 En el formulario de análisis, **Seleccionar todos** marca todos los módulos; **Limpiar** los desmarca.
 
-## 9. CLI
+## 9. Herramientas reales en Docker
+
+```bash
+marlonthebug tools build     # construir imagen Kali + herramientas
+marlonthebug tools status    # comprobar Docker/imagen
+marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
+```
+
+En el panel, abre un hallazgo con explotación activada y usa **Herramientas reales → Ejecutar en Docker**. Herramientas incluidas: sqlmap, nuclei, commix, whatweb, nikto y nmap.
+
+El contenedor es efímero, sin capacidades extra y con un volumen temporal. Si Docker no está arrancado, el panel lo avisa y no ejecuta nada.
+
+## 10. CLI
 
 ```bash
 marlonthebug workspace list
@@ -106,7 +118,7 @@ marlonthebug intel sync
 marlonthebug legacy import --reports reports
 ```
 
-## 10. Datos y backup
+## 11. Datos y backup
 
 Todo vive en el directorio de datos. Para hacer backup:
 
@@ -126,7 +138,7 @@ marlonthebug panel --portable
 
 Nunca copies `panel.token` a un repositorio ni lo compartas.
 
-## 11. Solución de problemas
+## 12. Solución de problemas
 
 | Problema | Solución |
 |---|---|

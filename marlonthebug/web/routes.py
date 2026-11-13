@@ -35,6 +35,7 @@ from marlonthebug.web.deps import (
     get_reports,
     get_scans,
     get_settings,
+    get_tools,
     parse_cookies,
     parse_headers,
     plugin_groups,
@@ -567,6 +568,8 @@ async def finding_detail(request: Request, finding_id: str):
         raise HTTPException(404, "Hallazgo no encontrado")
     modules = await get_exploitation(request).available_modules(finding)
     exploit_runs = await repo.list_exploit_runs(finding_id=finding.id, limit=10)
+    tool_modules = get_tools(request).available_tools(finding)
+    docker_status = await get_tools(request).status() if tool_modules else {"available": False}
     return await render(
         request,
         "finding_detail.html",
@@ -576,6 +579,8 @@ async def finding_detail(request: Request, finding_id: str):
         statuses_available=STATUSES,
         exploit_modules=modules,
         exploit_runs=exploit_runs,
+        tool_modules=tool_modules,
+        docker_status=docker_status,
         allow_exploitation=bool(finding.workspace and finding.workspace.allow_exploitation),
     )
 
@@ -625,6 +630,7 @@ async def exploits_page(request: Request):
         workspace_id = workspaces[0].id if workspaces else None
     exploitable = await get_exploitation(request).list_exploitable(workspace_id) if workspace_id else []
     runs = await repo.list_exploit_runs(workspace_id, limit=50)
+    docker_status = await get_tools(request).status()
     return await render(
         request,
         "exploits.html",
@@ -632,6 +638,8 @@ async def exploits_page(request: Request):
         workspace_id=workspace_id,
         exploitable=exploitable,
         runs=runs,
+        docker_status=docker_status,
+        tool_image=get_settings(request).tools.docker_image,
     )
 
 
@@ -669,6 +677,26 @@ async def run_exploit(request: Request, finding_id: str):
     if run.status == "not_applicable":
         return redirect_with(f"/exploits/{run.id}", err="El módulo no encontró condiciones para explotar")
     return redirect_with(f"/exploits/{run.id}", err="La explotación no pudo confirmarse")
+
+
+@router.post("/findings/{finding_id}/tool")
+async def run_tool(request: Request, finding_id: str):
+    form = await request.form()
+    require_csrf(request, form)
+    tool_key = str(form.get("tool", ""))
+    confirm_text = str(form.get("confirm_text", ""))
+    try:
+        run = await get_tools(request).run(
+            finding_id=finding_id,
+            tool_key=tool_key,
+            confirm_text=confirm_text,
+            operator="panel",
+        )
+    except ExploitBlocked as exc:
+        return redirect_with(f"/findings/{finding_id}", err=str(exc))
+    if run.status == "success":
+        return redirect_with(f"/exploits/{run.id}", ok="Herramienta ejecutada y evidencia guardada")
+    return redirect_with(f"/exploits/{run.id}", err="La herramienta no confirmó el hallazgo; revisa la salida")
 
 
 # ── Assets ────────────────────────────────────────────────
@@ -939,6 +967,7 @@ async def settings_page(request: Request):
     audit = await repo.list_audit(50)
     feeds = await repo.list_feeds()
     plugin_count = sum(len(items) for items in plugin_groups(request).values())
+    docker_status = await get_tools(request).status()
     return await render(
         request,
         "settings.html",
@@ -948,6 +977,7 @@ async def settings_page(request: Request):
         audit=audit,
         feeds=feeds,
         plugin_count=plugin_count,
+        docker_status=docker_status,
     )
 
 
@@ -965,11 +995,14 @@ async def update_settings(request: Request):
         settings.intel.sync_interval_hours = max(1, int(form.get("sync_interval_hours", 24)))
     with contextlib.suppress(ValueError):
         settings.panel.page_size = max(10, min(200, int(form.get("page_size", 50))))
-    try:
+    with contextlib.suppress(ValueError):
         settings.scan.requests_per_second = max(0.5, float(form.get("requests_per_second", 8)))
         settings.scan.max_requests = max(100, int(form.get("max_requests", 2500)))
-    except ValueError:
-        pass
+    settings.tools.enabled = bool(form.get("tools_enabled"))
+    settings.tools.docker_image = str(form.get("docker_image", settings.tools.docker_image)).strip()
+    settings.tools.network = str(form.get("docker_network", settings.tools.network))
+    with contextlib.suppress(ValueError):
+        settings.tools.timeout = max(30, min(900, int(form.get("tool_timeout", 180))))
     save_settings(settings, get_paths(request))
     await get_repo(request).log_action("settings.update", detail={"by": "panel"})
     return redirect_with("/settings", ok="Configuración guardada")

@@ -122,9 +122,43 @@
   {% else %}
     <p class="muted">No hay un módulo de explotación mapeado para este plugin.</p>
   {% endif %}
+</section>
 
-  {% if exploit_runs %}
-  <h3 class="section-title">Ejecuciones anteriores</h3>
+{% if tool_modules %}
+<section class="card" style="margin-top:18px">
+  <div class="card-head">
+    <div><span class="eyebrow">Herramientas reales</span><h2>Ejecutar en Docker</h2></div>
+    <span class="tag">Kali / contenedor aislado</span>
+  </div>
+  {% if docker_status.available and docker_status.image_ready %}
+  <p class="muted">Ejecuta la herramienta real contra el objetivo. El contenedor se elimina al terminar y la salida queda registrada como evidencia.</p>
+  <form method="post" action="/findings/{{ finding.id }}/tool" class="stack" data-confirm="¿Ejecutar la herramienta Docker contra {{ finding.target_host }}?">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid-2">
+      <label class="field"><span>Herramienta</span>
+        <select name="tool" required>
+          {% for tool in tool_modules %}
+          <option value="{{ tool.key }}">{{ tool.name }} · riesgo {{ tool.risk }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Confirmación</span>
+        <input type="text" name="confirm_text" placeholder="Escribe EXPLOTAR" autocomplete="off" required>
+      </label>
+    </div>
+    <button class="btn btn-primary" type="submit">{{ icon('cpu', 16) }} Ejecutar herramienta</button>
+  </form>
+  {% elif docker_status.available %}
+  <div class="flash flash-err">{{ icon('alert', 18) }} <span>La imagen <code>{{ docker_status.image or 'marlonthebug/kali-tools:latest' }}</code> no está construida. Ejecuta <code>marlonthebug tools build</code>.</span></div>
+  {% else %}
+  <div class="flash flash-err">{{ icon('alert', 18) }} <span>Docker no está disponible: {{ docker_status.reason or 'arranca Docker Desktop' }}</span></div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if exploit_runs %}
+<section class="card" style="margin-top:18px">
+  <div class="card-head"><div><span class="eyebrow">Historial</span><h2>Ejecuciones anteriores</h2></div></div>
   <div class="table-wrap">
     <table class="table compact">
       <thead><tr><th>Estado</th><th>Módulo</th><th>Riesgo</th><th>Fecha</th><th></th></tr></thead>
@@ -141,8 +175,8 @@
       </tbody>
     </table>
   </div>
-  {% endif %}
 </section>
+{% endif %}
 {% else %}
 <section class="card" style="margin-top:18px">
   <div class="card-head"><div><span class="eyebrow">Explotación controlada</span><h2>Desactivada</h2></div></div>

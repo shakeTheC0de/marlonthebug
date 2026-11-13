@@ -81,6 +81,14 @@ reports:
   include_remediation: true
   include_waf_rules: true
 
+tools:
+  enabled: true
+  docker_image: "marlonthebug/kali-tools:latest"
+  timeout: 180
+  network: "bridge"
+  max_output_chars: 60000
+  auto_pull: false
+
 logging:
   level: "INFO"
   format: "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}"

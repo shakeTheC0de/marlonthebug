@@ -1,0 +1,30 @@
+# Kali Linux tools image for MarlonTheBug controlled exploitation.
+# Build: docker build -f Dockerfile.tools -t marlonthebug/kali-tools:latest .
+# The container is ephemeral, drops capabilities and has no host mounts except /work.
+FROM kalilinux/kali-rolling
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        jq \
+        nmap \
+        nikto \
+        sqlmap \
+        commix \
+        nuclei \
+        whatweb \
+        ffuf \
+        gobuster \
+        hydra \
+        dnsutils \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Keep nuclei templates current at build time; ignore failures on restricted networks.
+RUN nuclei -update-templates >/dev/null 2>&1 || true
+
+WORKDIR /work
+CMD ["bash"]

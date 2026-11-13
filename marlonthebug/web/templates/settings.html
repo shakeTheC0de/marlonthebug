@@ -30,6 +30,32 @@
         <label class="check"><input type="checkbox" name="auto_sync" {% if settings.intel.auto_sync %}checked{% endif %}><span>Sincronizar inteligencia automáticamente</span></label>
         <label class="check"><input type="checkbox" name="offline" {% if settings.intel.offline %}checked{% endif %}><span>Modo offline (no descargar feeds)</span></label>
       </div>
+      <h3 class="section-title">Docker / herramientas reales</h3>
+      <div class="check-list">
+        <label class="check"><input type="checkbox" name="tools_enabled" {% if settings.tools.enabled %}checked{% endif %}><span>Permitir herramientas externas en Docker</span></label>
+      </div>
+      <label class="field"><span>Imagen Docker</span><input type="text" name="docker_image" value="{{ settings.tools.docker_image }}"></label>
+      <div class="form-grid-2">
+        <label class="field"><span>Red del contenedor</span>
+          <select name="docker_network">
+            <option value="bridge" {% if settings.tools.network == 'bridge' %}selected{% endif %}>bridge (recomendado)</option>
+            <option value="host" {% if settings.tools.network == 'host' %}selected{% endif %}>host (Linux)</option>
+          </select>
+        </label>
+        <label class="field"><span>Timeout por herramienta (s)</span><input type="number" name="tool_timeout" min="30" max="900" value="{{ settings.tools.timeout }}"></label>
+      </div>
+      <div class="notice">
+        <strong>Docker</strong>
+        <p>
+          {% if docker_status.available and docker_status.image_ready %}
+          Motor disponible. Imagen <code>{{ settings.tools.docker_image }}</code> lista.
+          {% elif docker_status.available %}
+          Docker disponible, pero falta la imagen. Ejecuta <code>marlonthebug tools build</code>.
+          {% else %}
+          Docker no disponible: {{ docker_status.reason or 'arranca Docker Desktop' }}.
+          {% endif %}
+        </p>
+      </div>
       <button class="btn btn-primary" type="submit">{{ icon('check', 16) }} Guardar configuración</button>
     </form>
   </section>

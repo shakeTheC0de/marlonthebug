@@ -35,12 +35,14 @@ report_app = typer.Typer(help="Generación de informes", no_args_is_help=True)
 intel_app = typer.Typer(help="Inteligencia de vulnerabilidades", no_args_is_help=True)
 legacy_app = typer.Typer(help="Importación de datos de versiones anteriores", no_args_is_help=True)
 exploit_app = typer.Typer(help="Explotación controlada", no_args_is_help=True)
+tools_app = typer.Typer(help="Herramientas reales en Docker", no_args_is_help=True)
 cli.add_typer(workspace_app, name="workspace")
 cli.add_typer(scan_app, name="scan")
 cli.add_typer(report_app, name="report")
 cli.add_typer(intel_app, name="intel")
 cli.add_typer(legacy_app, name="legacy")
 cli.add_typer(exploit_app, name="exploit")
+cli.add_typer(tools_app, name="tools")
 
 console = Console()
 
@@ -608,6 +610,80 @@ async def _exploit_run(
         console.print(run.output or run.error or "Sin salida")
         if run.evidence:
             console.print(run.evidence)
+    finally:
+        await database.close()
+
+
+@tools_app.command("status")
+def tools_status(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
+    """Muestra el estado de Docker y la imagen de herramientas."""
+    asyncio.run(_tools_status(data_dir))
+
+
+async def _tools_status(data_dir: str | None) -> None:
+    from marlonthebug.tools.service import ToolService
+
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        service = ToolService(repository, settings, paths)
+        status = await service.status()
+        console.print(status)
+    finally:
+        await database.close()
+
+
+@tools_app.command("build")
+def tools_build(
+    image: str | None = typer.Option(None, "--image", help="Imagen a construir"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Construye la imagen Docker con Kali y las herramientas."""
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    if image:
+        settings.tools.docker_image = image
+    from marlonthebug.tools.service import ToolService
+
+    service = ToolService(None, settings, paths)  # type: ignore[arg-type]
+    console.print(f"[*] Construyendo {settings.tools.docker_image}…")
+    code, output = service.build_image_sync()
+    console.print(output)
+    if code == 0:
+        console.print(f"[green]Imagen lista:[/green] {settings.tools.docker_image}")
+    else:
+        console.print(f"[red]La construcción falló con código {code}[/red]")
+        raise typer.Exit(code)
+
+
+@tools_app.command("run")
+def tools_run(
+    finding_id: str = typer.Option(..., "--finding", "-f"),
+    tool: str = typer.Option(..., "--tool", "-t", help="sqlmap, nuclei, commix, whatweb, nikto, nmap"),
+    confirm_text: str = typer.Option(..., "--confirm-text", help="Escribe EXPLOTAR"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Ejecuta una herramienta real en Docker contra un hallazgo."""
+    asyncio.run(_tools_run(finding_id, tool, confirm_text, data_dir))
+
+
+async def _tools_run(finding_id: str, tool: str, confirm_text: str, data_dir: str | None) -> None:
+    from marlonthebug.services.exploitation import ExploitBlocked
+    from marlonthebug.tools.service import ToolService
+
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        service = ToolService(repository, settings, paths)
+        try:
+            run = await service.run(finding_id, tool, confirm_text, operator="cli")
+        except ExploitBlocked as exc:
+            console.print(f"[red]Bloqueado:[/red] {exc}")
+            raise typer.Exit(1) from exc
+        console.print(f"[bold]Estado:[/bold] {run.status}")
+        console.print(run.output[:8000] or run.error or "Sin salida")
     finally:
         await database.close()
 

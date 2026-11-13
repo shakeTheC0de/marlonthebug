@@ -111,6 +111,15 @@ class ReportSettings(BaseModel):
     include_waf_rules: bool = True
 
 
+class ToolSettings(BaseModel):
+    enabled: bool = True
+    docker_image: str = "marlonthebug/kali-tools:latest"
+    timeout: int = 180
+    network: str = "bridge"
+    max_output_chars: int = 60000
+    auto_pull: bool = False
+
+
 class LoggingSettings(BaseModel):
     level: str = "INFO"
     format: str = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}"
@@ -130,6 +139,7 @@ class AppSettings(BaseModel):
     panel: PanelSettings = Field(default_factory=PanelSettings)
     intel: IntelSettings = Field(default_factory=IntelSettings)
     reports: ReportSettings = Field(default_factory=ReportSettings)
+    tools: ToolSettings = Field(default_factory=ToolSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
 
     model_config = {"extra": "ignore"}

@@ -13,6 +13,7 @@
 | 6. Módulos modernos | ✅ | JWT, OAuth, BOLA/IDOR, mass assignment, GraphQL, prototype pollution, cache poisoning, supply chain, cloud dashboards, CI/CD, LLM |
 | 7. Portabilidad | ✅ | `--portable`, datos fuera del repo, Docker, PyInstaller en CI, README |
 | 8. Explotación controlada | ✅ | SQLi, XSS, LFI, RCE, SSTI, SSRF, open redirect; confirmación tipada, evidencia y audit log |
+| 9. Herramientas Docker | ✅ | Imagen Kali con sqlmap, nuclei, commix, whatweb, nikto, nmap; ejecución aislada y conectada al panel |
 
 ## Principios
 

@@ -183,6 +183,35 @@ Solo debes usar estos módulos contra sistemas propios o con autorización escri
 
 ---
 
+## Herramientas reales en Docker
+
+El panel puede ejecutar herramientas reales dentro de un contenedor Kali aislado. La imagen incluye `sqlmap`, `nuclei`, `commix`, `whatweb`, `nikto`, `nmap`, `ffuf`, `gobuster` y `hydra`.
+
+```bash
+# Construir la imagen (una vez)
+marlonthebug tools build
+
+# Comprobar Docker y la imagen
+marlonthebug tools status
+
+# Ejecutar una herramienta contra un hallazgo
+marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
+```
+
+Desde el panel: abre un hallazgo con explotación activada y usa **Herramientas reales → Ejecutar en Docker**.
+
+Medidas de seguridad:
+
+- El contenedor usa `--rm`, `--cap-drop ALL`, `--security-opt no-new-privileges`, límites de CPU/memoria y un volumen temporal `/work`.
+- El objetivo se valida contra el scope antes de arrancar Docker.
+- Los targets `localhost`/`127.0.0.1` se reescriben a `host.docker.internal` para Docker Desktop.
+- Cada ejecución crea un `exploit_run` con comando, salida, duración y evidencia.
+- Si Docker no está arrancado, el panel lo indica y no ejecuta nada.
+
+La imagen también puede publicarse en GHCR con el workflow `Tools image`.
+
+---
+
 ## Inteligencia de vulnerabilidades
 
 - **CISA KEV**: vulnerabilidades explotadas activamente.

@@ -98,6 +98,18 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
 
 Cada ejecución se registra en `exploit_runs` y en el audit log. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
 
+## Herramientas Docker
+
+`ToolService` ejecuta herramientas reales en un contenedor efímero construido desde `Dockerfile.tools`:
+
+- Valida `allow_exploitation`, confirmación tipada y scope.
+- Reescribe `localhost` a `host.docker.internal` cuando es necesario.
+- Ejecuta con `--rm`, `--cap-drop ALL`, `--security-opt no-new-privileges`, CPU/memoria limitadas y `/work` temporal.
+- Guarda comando, salida, duración y clasificación en `exploit_runs`.
+- Si Docker o la imagen no están listos, devuelve un error claro y no ejecuta nada.
+
+Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hydra.
+
 ## Portabilidad
 
 - `AppPaths` resuelve datos, configuración, informes, logs, caché y token.

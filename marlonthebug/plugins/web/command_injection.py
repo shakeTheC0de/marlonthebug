@@ -1,173 +1,170 @@
-"""Command Injection detection — blind, time-based, and out-of-band."""
+"""Command injection detection with baseline timing and repeated validation."""
 
 from __future__ import annotations
 
 import logging
+import statistics
 import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from marlonthebug.http.client import AsyncHTTPClient
-from marlonthebug.plugins.base import BasePlugin, Finding, Severity
+from marlonthebug.plugins.base import BasePlugin, Confidence, Finding, Severity
 
 if TYPE_CHECKING:
-    from marlonthebug.core.workspace import TargetInfo, Workspace
+    from marlonthebug.core.workspace import TargetInfo
 
 logger = logging.getLogger("marlonthebug.plugins.web.command_injection")
 
-CMD_PAYLOADS = [
-    "; id",
-    "| id",
-    "`id`",
-    "$(id)",
-    "&& id",
-    "|| id",
-    "| /usr/bin/id",
-    "& id &",
-]
-
-TIME_PAYLOADS = [
-    "; sleep 3",
-    "| sleep 3",
-    "`sleep 3`",
-    "$(sleep 3)",
-    "&& sleep 3",
-]
-
+CMD_PAYLOADS = ["; id", "| id", "$(id)", "`id`", "&& id", "|| id"]
+TIME_PAYLOADS = ["; sleep 5", "| sleep 5", "`sleep 5`", "$(sleep 5)", "&& sleep 5"]
 CMD_PARAMS = ["cmd", "exec", "command", "run", "shell", "ping", "host", "ip", "address", "domain"]
+EDGE_STATUS = {520, 521, 522, 523, 524, 525, 526, 530}
 
 
 class CommandInjectionAuditor(BasePlugin):
     name = "command_injection"
-    version = "1.0.0"
-    description = "Detect OS command injection vulnerabilities: blind, time-based, and output-based"
+    version = "2.0.0"
+    description = "Detecta command injection con baseline temporal, repetición y validación de salida"
     category = "web"
-
-    async def setup(self, workspace: Workspace) -> None:
-        self._workspace = workspace
+    cwe = "CWE-78"
+    owasp = "A03:2021 Injection"
 
     async def run(self, target: TargetInfo, options: dict | None = None) -> AsyncIterator[Finding]:
-        http = AsyncHTTPClient(timeout=15, retries=1)
+        options = options or {}
+        base_url = str(options.get("base_url") or f"https://{target.host}").rstrip("/")
+        endpoints = list(options.get("endpoints") or [])
+        http = AsyncHTTPClient(timeout=20, retries=1)
+        reported: set[tuple[str, str]] = set()
         try:
-            for scheme in ["https", "http"]:
-                try:
-                    resp = await http.get(f"{scheme}://{target.host}")
-                    base_url = f"{scheme}://{target.host}"
-                    break
-                except Exception:
-                    continue
-            else:
-                return
-
-            from urllib.parse import urljoin
-
-            from bs4 import BeautifulSoup
-
-            soup = BeautifulSoup(resp.body, "lxml")
-            test_urls: set[str] = set()
-
-            for a in soup.find_all("a", href=True):
-                href = urljoin(base_url, a["href"])
-                parsed = urlparse(href)
-                if parsed.netloc in (target.host, f"www.{target.host}"):
-                    test_urls.add(href)
-
-            for form in soup.find_all("form"):
-                action = urljoin(base_url, form.get("action", ""))
-                inputs = [(inp.get("name", ""), inp.get("value", "")) for inp in form.find_all("input")]
-                if inputs:
-                    params_str = "&".join(f"{n}={v or 'test'}" for n, v in inputs if n)
-                    test_urls.add(f"{action}?{params_str}")
-
-            for cp in CMD_PARAMS:
-                test_urls.add(f"{base_url}?{cp}=test")
-
-            for url in list(test_urls)[:15]:
+            urls = [url for url in endpoints if "?" in url and "=" in url]
+            for param in CMD_PARAMS:
+                urls.append(f"{base_url}?{param}=test")
+            for url in list(dict.fromkeys(urls))[:20]:
                 parsed = urlparse(url)
                 params = parse_qs(parsed.query)
                 if not params:
                     continue
-
-                for param_name in list(params.keys())[:10]:
-                    param_lower = param_name.lower()
-                    is_cmd_param = any(cp in param_lower for cp in CMD_PARAMS)
-
-                    if not is_cmd_param:
+                for param in list(params.keys())[:6]:
+                    if param.lower() not in CMD_PARAMS or (url, param) in reported:
                         continue
-
-                    baseline_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
-                    baseline_params[param_name] = "test"
-                    query_str = "&".join(f"{k}={v}" for k, v in baseline_params.items())
-                    baseline_url = parsed._replace(query=query_str).geturl()
-
+                    baseline_url = _with_param(url, params, param, "test")
                     try:
                         baseline = await http.get(baseline_url)
                     except Exception:
                         continue
+                    if _edge_error(baseline):
+                        continue
                     baseline_body = baseline.body
+                    # Measure normal latency twice before trusting a delay.
+                    timings = []
+                    for _ in range(2):
+                        try:
+                            started = time.monotonic()
+                            await http.get(baseline_url)
+                            timings.append(time.monotonic() - started)
+                        except Exception:
+                            break
+                    baseline_time = statistics.mean(timings) if timings else 0.5
 
-                    for payload in CMD_PAYLOADS[:3]:
-                        test_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
-                        test_params[param_name] = payload
-                        query_str = "&".join(f"{k}={v}" for k, v in test_params.items())
-                        test_url = parsed._replace(query=query_str).geturl()
-
+                    for payload in CMD_PAYLOADS:
+                        test_url = _with_param(url, params, param, payload)
                         try:
                             response = await http.get(test_url)
-                            for indicator in ["uid=", "gid=", "groups="]:
-                                if indicator in response.body and indicator not in baseline_body:
-                                    yield self.create_finding(
-                                        title=f"Command Injection in '{param_name}' — output visible",
-                                        description=f"OS command injection in parameter '{param_name}'. "
-                                        f"Payload '{payload}' returned {indicator}.",
-                                        severity=Severity.CRITICAL,
-                                        cvss_score=10.0,
-                                        endpoint=url,
-                                        target_host=target.host,
-                                        evidence={
-                                            "parameter": param_name,
-                                            "payload": payload,
-                                            "response_snippet": response.body[:300],
-                                        },
-                                        remediation=(
-                                            "1. Never pass user input to system commands\n"
-                                            "2. Use library calls instead of shell commands\n"
-                                            "3. Escape or sanitize special characters: ; | & $ ( ) ` \\n"
-                                            "4. Use allowlists for command parameters\n"
-                                            "5. Run with minimal privileges (no root/sudo)"
-                                        ),
-                                    )
-                                    break
                         except Exception:
-                            pass
-
-                    for time_payload in TIME_PAYLOADS[:2]:
-                        start = time.monotonic()
-                        test_params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
-                        test_params[param_name] = time_payload
-                        query_str = "&".join(f"{k}={v}" for k, v in test_params.items())
-                        test_url = parsed._replace(query=query_str).geturl()
-
-                        try:
-                            await http.get(test_url)
-                            elapsed = time.monotonic() - start
-                            if elapsed > 2.0:
+                            continue
+                        if _edge_error(response):
+                            continue
+                        for indicator in ("uid=", "gid=", "groups="):
+                            if indicator in response.body and indicator not in baseline_body:
+                                reported.add((url, param))
                                 yield self.create_finding(
-                                    title=f"Command Injection in '{param_name}' — time-based (blind)",
-                                    description=f"Blind time-based command injection in parameter '{param_name}'. "
-                                    f"Response took {elapsed:.1f}s with sleep payload.",
+                                    title=f"Command injection en '{param}' — salida visible",
+                                    description=(
+                                        f"El parámetro '{param}' ejecuta comandos del sistema. "
+                                        f"El payload {payload!r} devolvió '{indicator}'."
+                                    ),
                                     severity=Severity.CRITICAL,
-                                    cvss_score=9.5,
+                                    cvss_score=9.8,
+                                    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                                    confidence=Confidence.HIGH,
+                                    cwe="CWE-78",
+                                    owasp="A03:2021 Injection",
                                     endpoint=url,
                                     target_host=target.host,
                                     evidence={
-                                        "parameter": param_name,
-                                        "payload": time_payload,
-                                        "response_time": elapsed,
+                                        "parameter": param,
+                                        "payload": payload,
+                                        "indicator": indicator,
+                                        "test_url": test_url,
+                                        "response_snippet": response.body[:600],
                                     },
+                                    remediation=(
+                                        "Evita invoke system()/shell; usa APIs del lenguaje, allowlists de "
+                                        "comandos y ejecución con mínimo privilegio."
+                                    ),
                                 )
+                                break
+                        if (url, param) in reported:
+                            break
+
+                    if (url, param) in reported:
+                        continue
+
+                    for payload in TIME_PAYLOADS:
+                        test_url = _with_param(url, params, param, payload)
+                        try:
+                            started = time.monotonic()
+                            await http.get(test_url)
+                            elapsed = time.monotonic() - started
                         except Exception:
-                            pass
+                            continue
+                        if elapsed < baseline_time + 4.0:
+                            continue
+                        try:
+                            started = time.monotonic()
+                            await http.get(test_url)
+                            confirm = time.monotonic() - started
+                        except Exception:
+                            continue
+                        if confirm < baseline_time + 3.5:
+                            continue
+                        reported.add((url, param))
+                        yield self.create_finding(
+                            title=f"Command injection time-based en '{param}'",
+                            description=(
+                                f"El parámetro '{param}' introduce un retraso reproducible de {confirm:.1f}s "
+                                f"frente a un baseline de {baseline_time:.2f}s."
+                            ),
+                            severity=Severity.CRITICAL,
+                            cvss_score=9.1,
+                            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+                            confidence=Confidence.HIGH,
+                            cwe="CWE-78",
+                            owasp="A03:2021 Injection",
+                            endpoint=url,
+                            target_host=target.host,
+                            evidence={
+                                "parameter": param,
+                                "payload": payload,
+                                "baseline_seconds": round(baseline_time, 2),
+                                "delayed_seconds": round(confirm, 2),
+                                "confirmed": True,
+                            },
+                            remediation="Evita ejecutar comandos del sistema con entrada del usuario.",
+                        )
+                        break
         finally:
             await http.close()
+
+
+def _with_param(url: str, params: dict[str, list[str]], param: str, value: str) -> str:
+    parsed = urlparse(url)
+    test_params = {key: values[0] for key, values in params.items()}
+    test_params[param] = value
+    return urlunparse(parsed._replace(query=urlencode(test_params, doseq=True)))
+
+
+def _edge_error(response) -> bool:
+    return response.status_code in EDGE_STATUS or "ssl handshake failed" in response.body.lower()

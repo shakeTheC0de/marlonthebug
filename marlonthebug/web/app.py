@@ -23,6 +23,7 @@ from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportService
 from marlonthebug.services.scanner import ScanManager
 from marlonthebug.settings import AppSettings, load_settings, write_default_config
+from marlonthebug.tools.service import ToolService
 from marlonthebug.web import filters
 from marlonthebug.web.routes import router
 from marlonthebug.web.security import PanelAuth, safe_next
@@ -50,6 +51,7 @@ def create_app(
     scan_manager = ScanManager(repository, settings, intel)
     report_service = ReportService(repository, settings, paths)
     exploitation = ExploitationService(repository, settings, paths)
+    tools = ToolService(repository, settings, paths)
     auth = PanelAuth(paths, enabled=settings.panel.auth)
 
     templates = Jinja2Templates(directory=str(resource_path("web", "templates")))
@@ -125,6 +127,7 @@ def create_app(
     app.state.intel = intel
     app.state.report_service = report_service
     app.state.exploitation = exploitation
+    app.state.tools = tools
     app.state.auth = auth
     app.state.templates = templates
     app.state.intel_syncing = False
