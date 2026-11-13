@@ -91,9 +91,9 @@ def _commix(url: str, finding: Any) -> list[str]:
         "commix",
         f"--url={url}",
         "--batch",
-        "--level=2",
+        "--level=1",
         "--os-cmd=id",
-        "--timeout=10",
+        "--timeout=30",
     ]
 
 
