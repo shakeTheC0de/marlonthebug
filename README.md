@@ -6,6 +6,8 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 
 > Uso exclusivo sobre sistemas propios o con autorización escrita. Cada acción queda registrada en el log de auditoría.
 
+![Dashboard del panel](docs/screenshots/dashboard.png)
+
 ---
 
 ## Qué incluye
@@ -18,6 +20,10 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 - **Inteligencia de vulnerabilidades**: CISA KEV, EPSS, NVD y OSV con caché local y bundles para entornos air-gapped.
 - **Modo portable**: todos los datos en `./data`, ideal para USB.
 - **Sin CDN, sin telemetría y sin dependencias de servicios cloud**.
+
+| Bandeja de hallazgos | Informe PDF |
+|---|---|
+| ![Hallazgos](docs/screenshots/findings.png) | ![Informe](docs/screenshots/report-cover.png) |
 
 ---
 
