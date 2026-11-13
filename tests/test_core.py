@@ -354,12 +354,6 @@ class TestFuzzer:
 
 class TestTechFingerprinter:
     def test_signature_count(self) -> None:
-        import sys
-
-        if "marlonthebug.plugins.recon.tech_fingerprint" in sys.modules:
-            del sys.modules["marlonthebug.plugins.recon.tech_fingerprint"]
-        if "marlonthebug.plugins.base" in sys.modules:
-            del sys.modules["marlonthebug.plugins.base"]
         from marlonthebug.plugins.recon.tech_fingerprint import TECH_SIGNATURES
 
         assert len(TECH_SIGNATURES) > 20
@@ -367,24 +361,13 @@ class TestTechFingerprinter:
 
 class TestSecretFinder:
     def test_rules_count(self) -> None:
-        import sys
-
-        if "marlonthebug.plugins.recon.secret_finder" in sys.modules:
-            del sys.modules["marlonthebug.plugins.recon.secret_finder"]
-        if "marlonthebug.plugins.base" in sys.modules:
-            del sys.modules["marlonthebug.plugins.base"]
         from marlonthebug.plugins.recon.secret_finder import SECRET_RULES
 
         assert len(SECRET_RULES) > 15
 
     def test_aws_key_pattern(self) -> None:
         import re
-        import sys
 
-        if "marlonthebug.plugins.recon.secret_finder" in sys.modules:
-            del sys.modules["marlonthebug.plugins.recon.secret_finder"]
-        if "marlonthebug.plugins.base" in sys.modules:
-            del sys.modules["marlonthebug.plugins.base"]
         from marlonthebug.plugins.recon.secret_finder import SECRET_RULES
 
         aws_rule = next((r for r in SECRET_RULES if r["name"] == "AWS Access Key ID"), None)

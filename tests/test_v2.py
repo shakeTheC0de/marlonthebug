@@ -7,7 +7,11 @@ import hashlib
 import hmac
 import json
 import re
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,7 +25,9 @@ from marlonthebug.paths import AppPaths
 from marlonthebug.plugins.api.jwt import JWTAuditor
 from marlonthebug.plugins.recon.endpoint_discovery import _content_is_valid
 from marlonthebug.plugins.recon.supply_chain import SupplyChainAuditor
+from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportRequest, ReportService
+from marlonthebug.services.scanner import ScanManager
 from marlonthebug.settings import load_settings
 from marlonthebug.web.app import create_app
 
@@ -249,3 +255,78 @@ def test_panel_pages_render(app_paths: AppPaths) -> None:
         assert client.get("/intel").status_code == 200
         assert client.get("/settings").status_code == 200
         assert client.get("/api/workspaces").status_code == 200
+
+
+async def test_scan_pipeline_against_local_server(app_paths: AppPaths) -> None:
+    shell = b"<html><head><title>Demo</title></head><body><a href='/search?q=test'>Search</a></body></html>"
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args) -> None:
+            return
+
+        def do_GET(self) -> None:
+            parsed = urlparse(self.path)
+            query = parse_qs(parsed.query)
+            if parsed.path == "/search":
+                value = query.get("q", [""])[0]
+                body = (
+                    b"SQL syntax error MySQL"
+                    if "'" in value
+                    else f"<html><body>{value}<svg onload=alert(1)></body></html>".encode()
+                )
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if parsed.path == "/.git/HEAD":
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(shell)))
+            self.end_headers()
+            self.wfile.write(shell)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    time.sleep(0.2)
+    host = f"127.0.0.1:{server.server_address[1]}"
+    database, repo = await _database(app_paths)
+    try:
+        settings = load_settings(app_paths)
+        settings.intel.offline = True
+        settings.scan.requests_per_second = 40
+        workspace = await repo.create_workspace("scan-test")
+        target = await repo.add_target(workspace.id, host)
+        scan = await repo.create_scan(
+            workspace.id,
+            [target.host],
+            ["recon", "web"],
+            modules=[
+                "recon/tech_fingerprint",
+                "recon/endpoint_discovery",
+                "recon/git_leaks",
+                "web/sqli",
+                "web/xss",
+            ],
+            profile="safe",
+            options={"max_requests": 400},
+        )
+        manager = ScanManager(repo, settings, IntelService(repo, settings, app_paths))
+        await manager.start(scan.id)
+        await manager.tasks[scan.id]
+        findings, _ = await repo.list_findings(workspace_id=workspace.id, page_size=100)
+        plugins = {finding.plugin_name for finding in findings}
+        assert "sqli" in plugins
+        assert "xss" in plugins
+        assert "git_leaks" not in plugins
+        assert not any(finding.endpoint.endswith("/.env") for finding in findings)
+        stored_scan = await repo.get_scan(scan.id)
+        assert stored_scan is not None
+        assert stored_scan.status == "completed"
+    finally:
+        await database.close()
+        server.shutdown()
