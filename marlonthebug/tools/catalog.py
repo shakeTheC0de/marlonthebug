@@ -16,6 +16,7 @@ class ToolSpec:
     risk: str
     plugins: tuple[str, ...]
     build_args: Callable[[str, Any], list[str]]
+    needs_tty: bool = False
 
 
 def _base_url(finding: Any) -> str:
@@ -142,6 +143,7 @@ TOOLS: dict[str, ToolSpec] = {
         risk="high",
         plugins=("rce", "command_injection"),
         build_args=_commix,
+        needs_tty=True,
     ),
     "whatweb": ToolSpec(
         key="whatweb",

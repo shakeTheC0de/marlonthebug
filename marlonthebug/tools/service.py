@@ -15,7 +15,7 @@ from marlonthebug.db.repository import Repository
 from marlonthebug.exploit.trace import TraceRecorder, reset_trace, set_trace
 from marlonthebug.exploit.webapp.utils import endpoint_candidates, is_edge_error
 from marlonthebug.paths import AppPaths, package_dir
-from marlonthebug.services.evidence import build_justification, finalize_evidence
+from marlonthebug.services.evidence import build_justification, extract_highlights, finalize_evidence
 from marlonthebug.services.exploitation import CONFIRMATION_WORDS, ExploitBlocked
 from marlonthebug.settings import AppSettings
 from marlonthebug.tools.catalog import build_command, tool_by_key, tools_for_plugin
@@ -144,7 +144,7 @@ class ToolService:
             detail={"finding_id": finding.id, "tool": tool.key},
         )
         try:
-            result = await self.runner.run(tool.key, args, target_url)
+            result = await self.runner.run(tool.key, args, target_url, tty=tool.needs_tty)
             status = "success" if result.success else "failed"
             recorder.steps.append(
                 {
@@ -159,8 +159,11 @@ class ToolService:
                 }
             )
             recorder.note("result", f"Resultado de la herramienta: {status}", {"success": result.success})
+            tool_evidence = result.evidence
+            if "highlights" not in tool_evidence:
+                tool_evidence = {**tool_evidence, "highlights": extract_highlights(tool_evidence)}
             evidence = finalize_evidence(
-                result.evidence,
+                tool_evidence,
                 build_justification(
                     finding=finding,
                     module_key=f"docker/{tool.key}",

@@ -87,7 +87,7 @@ class DockerToolRunner:
         )
         return await proc.wait() == 0
 
-    async def run(self, tool: str, args: list[str], target_url: str) -> ToolResult:
+    async def run(self, tool: str, args: list[str], target_url: str, tty: bool = False) -> ToolResult:
         if not self.settings.enabled:
             return ToolResult(tool, False, "", {}, error="Las herramientas externas están desactivadas")
         docker = shutil.which("docker")
@@ -108,6 +108,8 @@ class DockerToolRunner:
         container_name = f"mtb-tool-{uuid.uuid4().hex[:10]}"
         workdir = tempfile.mkdtemp(prefix="mtb-tool-")
         command = [docker, "run", "--rm", "--name", container_name, "--network", self.settings.network]
+        if tty:
+            command.append("-t")
         if self.settings.network != "host":
             command += ["--add-host", "host.docker.internal:host-gateway"]
         command += [
@@ -155,6 +157,7 @@ class DockerToolRunner:
             if len(output) > self.settings.max_output_chars:
                 output = output[: self.settings.max_output_chars] + "\n… [salida truncada]"
             success, reason = self._classify(tool, output)
+            highlights = _extract_highlights(output)
             return ToolResult(
                 tool=tool,
                 success=success,
@@ -166,6 +169,7 @@ class DockerToolRunner:
                     "returncode": proc.returncode,
                     "duration": round(duration, 2),
                     "classification": reason,
+                    "highlights": highlights,
                     "output_file": f"{workdir}",
                 },
                 error="" if success else reason,
@@ -189,7 +193,12 @@ class DockerToolRunner:
     def _classify(tool: str, output: str) -> tuple[bool, str]:
         lowered = output.lower()
         if tool == "sqlmap":
-            if "is vulnerable" in lowered or "available databases" in lowered or "parameter:" in lowered:
+            if (
+                "is vulnerable" in lowered
+                or "available databases" in lowered
+                or re.search(r"parameter:\s+\S+\s+\(", lowered)
+                or "back-end dbms" in lowered
+            ):
                 return True, "sqlmap identificó el parámetro como inyectable"
             if "not injectable" in lowered or "does not seem to be injectable" in lowered:
                 return False, "sqlmap no confirmó inyección"
@@ -198,9 +207,16 @@ class DockerToolRunner:
                 return True, "nuclei devolvió al menos una coincidencia"
             return False, "nuclei no devolvió coincidencias"
         elif tool == "commix":
-            if "vulnerable" in lowered or "injection" in lowered:
-                return True, "commix identificó command injection"
-            return False, "commix no confirmó command injection"
+            if "not reachable" in lowered or "does not seem" in lowered or "not injectable" in lowered:
+                return False, "commix no pudo alcanzar o confirmar el objetivo"
+            if (
+                re.search(r"(parameter|injection point).{0,120}(vulnerable|injectable)", lowered)
+                or "uid=" in lowered
+                or "root:x:0:0" in lowered
+                or "command execution" in lowered
+            ):
+                return True, "commix identificó y verificó command injection"
+            return False, "commix no devolvió una confirmación de inyección"
         if tool in {"whatweb", "nikto", "nmap"}:
             return True, "herramienta ejecutada; revisa la salida"
         return False, "sin marcador de confirmación"
@@ -208,6 +224,44 @@ class DockerToolRunner:
 
 def _clean(value: str) -> str:
     return ANSI_RE.sub("", value).strip()
+
+
+def _extract_highlights(output: str, limit: int = 25) -> list[str]:
+    markers = (
+        "vulnerable",
+        "injectable",
+        "payload",
+        "uid=",
+        "gid=",
+        "available databases",
+        "database:",
+        "back-end dbms",
+        "[critical]",
+        "[high]",
+        "[medium]",
+        "template-id",
+        "root:x:0:0",
+        "command execution",
+        "[+]",
+        "[success]",
+        "[200 ok]",
+        "title[",
+        "ip[",
+        "server[",
+        "country[",
+        "x-powered-by",
+        "open",
+    )
+    highlights: list[str] = []
+    for line in output.splitlines():
+        clean = line.strip()
+        if not clean or len(clean) < 8:
+            continue
+        if any(marker in clean.lower() for marker in markers) and clean not in highlights:
+            highlights.append(clean[:500])
+        if len(highlights) >= limit:
+            break
+    return highlights
 
 
 def docker_url(url: str) -> str:

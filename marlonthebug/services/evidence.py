@@ -75,6 +75,32 @@ def build_justification(
     }
 
 
+def extract_highlights(evidence: dict[str, Any]) -> list[str]:
+    highlights: list[str] = []
+    for key in ("matches", "matched"):
+        value = evidence.get(key)
+        if isinstance(value, list) and value:
+            highlights.append(f"{key}: {', '.join(str(item) for item in value[:8])}")
+    for key in (
+        "technique",
+        "engine",
+        "parameter",
+        "payload",
+        "expected",
+        "test_url",
+        "ssrf_target",
+        "location",
+        "status",
+        "reflected",
+        "rendered",
+        "response_snippet",
+    ):
+        value = evidence.get(key)
+        if value not in (None, "", [], {}):
+            highlights.append(f"{key}: {str(value)[:400]}")
+    return highlights[:15]
+
+
 def finalize_evidence(
     evidence: dict[str, Any],
     justification: dict[str, Any],
@@ -171,9 +197,16 @@ def to_markdown(run: Any) -> str:
             ]
         elif step.get("message"):
             lines += [f"### Paso {step.get('index')} — {step.get('phase')}", "", step.get("message", ""), ""]
+    highlights = evidence.get("highlights", [])
     lines += [
         "## 4. Resultado",
         "",
+    ]
+    if highlights:
+        lines += ["**Hallazgos clave:**", ""]
+        lines += [f"- `{item}`" for item in highlights]
+        lines += [""]
+    lines += [
         "```",
         str(run.output or run.error or "Sin salida")[:5000],
         "```",
