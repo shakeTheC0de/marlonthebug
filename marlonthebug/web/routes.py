@@ -46,7 +46,7 @@ router = APIRouter()
 
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 STATUSES = ["open", "confirmed", "false_positive", "accepted", "remediated"]
-CATEGORIES = ["recon", "web", "api", "auth", "cloud", "llm"]
+CATEGORIES = ["recon", "web", "api", "auth", "cloud", "cicd", "llm"]
 
 
 def require_csrf(request: Request, form) -> None:

@@ -79,6 +79,7 @@ def create_app(
                 "api": "API",
                 "auth": "Autenticación",
                 "cloud": "Cloud",
+                "cicd": "CI/CD",
                 "llm": "IA / LLM",
                 "general": "General",
             },

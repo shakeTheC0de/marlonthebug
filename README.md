@@ -13,7 +13,7 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 ## Qué incluye
 
 - **Panel web local** con dashboard, proyectos, activos, análisis, hallazgos, triaje e informes.
-- **33 módulos** de reconocimiento, web, API y LLM.
+- **35 módulos** de reconocimiento, web, API, cloud, CI/CD y LLM.
 - **CLI** completa para automatizar y ejecutar en servidores.
 - **Persistencia SQLite** con deduplicación de hallazgos e histórico por proyecto.
 - **Informes** ejecutivos y técnicos en PDF, HTML, Markdown y JSON, en español e inglés.
@@ -186,6 +186,7 @@ marlonthebug intel import intel-bundle.json
 | Reconocimiento | subdominios, DNS, fingerprint con versiones, endpoints, JS, secretos, `.git`, auth bypass, supply chain |
 | Web | SQLi, XSS, SSRF, CSRF, LFI/RFI, path traversal, file upload, SSTI, RCE, command injection, deserialización, smuggling, race conditions, lógica de negocio, WAF bypass, prototype pollution, cache poisoning |
 | API | JWT, OAuth/OIDC, BOLA/IDOR, mass assignment, GraphQL |
+| Cloud / CI-CD | dashboards y APIs cloud expuestas, pipelines y manifiestos públicos |
 | LLM | prompt injection con canario |
 
 Los módulos marcados como **beta** son heurísticas conservadoras y requieren validación manual. El panel muestra la confianza de cada hallazgo.
