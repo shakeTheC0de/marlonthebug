@@ -12,6 +12,7 @@ from typing import Any
 from marlonthebug.core.scope import ScopeGuard, scope_from_workspace
 from marlonthebug.db.models import ExploitRunModel, FindingModel
 from marlonthebug.db.repository import Repository
+from marlonthebug.exploit.webapp.utils import endpoint_candidates, is_edge_error
 from marlonthebug.paths import AppPaths, package_dir
 from marlonthebug.services.exploitation import CONFIRMATION_WORDS, ExploitBlocked
 from marlonthebug.settings import AppSettings
@@ -88,6 +89,10 @@ class ToolService:
         guard = ScopeGuard(scope)
         if not scope.is_url_allowed(target_url):
             guard.require(target_url)
+        resolved_url = await self._resolve_url(target_url)
+        if resolved_url != target_url:
+            args = [item.replace(target_url, resolved_url) for item in args]
+            target_url = resolved_url
         container_url = docker_url(target_url)
         if container_url != target_url:
             args = [
@@ -152,6 +157,25 @@ class ToolService:
                 finished_at=datetime.now(UTC),
             )
         return await self.repository.get_exploit_run(run.id) or run
+
+    async def _resolve_url(self, url: str) -> str:
+        import httpx
+
+        fallback = url
+        async with httpx.AsyncClient(timeout=8, verify=False, follow_redirects=True) as client:
+            for candidate in endpoint_candidates(url):
+                fallback = candidate
+                try:
+                    response = await client.get(candidate)
+                except Exception:
+                    continue
+                edge = is_edge_error(response) or any(
+                    marker in response.text.lower()
+                    for marker in ("ssl handshake failed", "cloudflare", "origin is unreachable")
+                )
+                if not edge:
+                    return candidate
+        return fallback
 
     async def build_image(self) -> tuple[int, str]:
         context = package_dir().parent

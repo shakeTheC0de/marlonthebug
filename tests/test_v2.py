@@ -21,6 +21,7 @@ from marlonthebug.core.workspace import TargetInfo
 from marlonthebug.db.database import Database, sqlite_url
 from marlonthebug.db.repository import Repository, finding_fingerprint
 from marlonthebug.exploit.registry import ExploitRegistry
+from marlonthebug.exploit.webapp.utils import get_with_fallback
 from marlonthebug.http.baseline import BaselineProbe, BaselineSample, similarity
 from marlonthebug.paths import AppPaths
 from marlonthebug.plugins.api.jwt import JWTAuditor
@@ -352,6 +353,26 @@ def test_tool_catalog_and_docker_url() -> None:
     assert tools_for_plugin("secret_finder") == []
     assert docker_url("http://127.0.0.1:8080/app?q=1") == "http://host.docker.internal:8080/app?q=1"
     assert docker_url("https://example.com") == "https://example.com"
+
+
+async def test_exploit_falls_back_from_https_edge_error() -> None:
+    class FakeResponse:
+        def __init__(self, status_code: int, body: str) -> None:
+            self.status_code = status_code
+            self.body = body
+
+    class FakeHTTP:
+        async def get(self, url: str) -> FakeResponse:
+            if url.startswith("https://"):
+                return FakeResponse(525, "SSL handshake failed")
+            return FakeResponse(200, "root:x:0:0")
+
+    response, test_url, tested_base = await get_with_fallback(
+        FakeHTTP(), "https://example.com/?file=test", "file", "../../etc/passwd"
+    )
+    assert response.status_code == 200
+    assert tested_base.startswith("http://")
+    assert test_url.startswith("http://")
 
 
 async def test_exploitation_requires_workspace_flag(app_paths: AppPaths) -> None:
