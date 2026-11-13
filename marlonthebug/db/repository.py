@@ -490,6 +490,7 @@ class Repository:
                 .options(
                     selectinload(FindingModel.target),
                     selectinload(FindingModel.workspace),
+                    selectinload(FindingModel.exploit_runs),
                 )
                 .order_by(SEVERITY_ORDER, FindingModel.cvss_score.desc())
                 .limit(max(1, min(limit, 20000)))

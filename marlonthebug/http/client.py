@@ -15,6 +15,7 @@ import httpx
 
 from marlonthebug.core.context import get_scan_context
 from marlonthebug.core.scope import ScopeGuard, ScopeViolation
+from marlonthebug.exploit.trace import get_trace
 
 logger = logging.getLogger("marlonthebug.http")
 
@@ -134,6 +135,8 @@ class AsyncHTTPClient:
 
         for attempt in range(self.retries + 1):
             started = time.monotonic()
+            trace = get_trace()
+            trace_step = trace.start_request(method, url, kwargs) if trace else None
             try:
                 response = await client.request(method, url, **kwargs)
                 elapsed = time.monotonic() - started
@@ -150,6 +153,8 @@ class AsyncHTTPClient:
                     redirect_chain=[str(item.url) for item in response.history],
                     title=title,
                 )
+                if trace and trace_step is not None:
+                    trace.finish_request(trace_step, result, elapsed)
                 if self._context:
                     await self._context.record(
                         method, str(response.url), result.status_code, result.content_length, elapsed
@@ -157,6 +162,8 @@ class AsyncHTTPClient:
                 return result
             except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as exc:
                 last_error = exc
+                if trace and trace_step is not None:
+                    trace.fail_request(trace_step, exc)
                 if self._context:
                     self._context.error_count += 1
                 if attempt < self.retries:

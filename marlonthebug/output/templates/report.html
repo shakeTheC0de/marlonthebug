@@ -327,6 +327,28 @@
     <pre>{{ finding.evidence|tojson(indent=2) }}</pre>
     {% endif %}
 
+    {% set successful_runs = finding.exploit_runs|selectattr('status', 'equalto', 'success')|list %}
+    {% if successful_runs %}
+    <h4>{{ 'Validación de explotación' if language == 'es' else 'Exploitation validation' }}</h4>
+    <table>
+      <thead>
+        <tr><th>{{ 'Módulo' if language == 'es' else 'Module' }}</th><th>{{ 'Riesgo' if language == 'es' else 'Risk' }}</th><th>{{ 'Fecha' if language == 'es' else 'Date' }}</th><th>{{ 'Evidencia' if language == 'es' else 'Evidence' }}</th></tr>
+      </thead>
+      <tbody>
+      {% for run in successful_runs %}
+      <tr>
+        <td class="mono">{{ run.module_name }}</td>
+        <td>{{ run.risk }}</td>
+        <td>{{ run.finished_at or run.created_at }}</td>
+        <td class="mono break">{{ run.evidence.get('integrity', {}).get('hash', '—') }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p><strong>{{ 'Resultado' if language == 'es' else 'Result' }}:</strong></p>
+    <pre>{{ successful_runs[0].output[:1200] }}</pre>
+    {% endif %}
+
     {% if include_remediation and finding.remediation %}
     <h4>{{ 'Remediación' if language == 'es' else 'Remediation' }}</h4>
     <p>{{ finding.remediation }}</p>

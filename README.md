@@ -177,7 +177,7 @@ La explotación no se ejecuta durante el escaneo. Se habilita por proyecto y req
 | `webapp/ssrf_exploit` | Metadata cloud y loopback | Alto |
 | `webapp/open_redirect_exploit` | Redirección a destino canario | Bajo |
 
-Cada ejecución se guarda en `exploit_runs` con payload, salida, evidencia, operador y estado de limpieza. Si la prueba se confirma, el hallazgo pasa a **verificado** y **confirmado**.
+Cada ejecución se guarda en `exploit_runs` con payload, salida, evidencia, operador y estado de limpieza. Además se registra un **traza paso a paso** de cada petición y respuesta, una justificación del hallazgo, comandos de reproducción y un hash SHA-256 de integridad. La evidencia se puede descargar en Markdown o JSON y aparece también en los informes. Si la prueba se confirma, el hallazgo pasa a **verificado** y **confirmado**.
 
 Solo debes usar estos módulos contra sistemas propios o con autorización escrita.
 

@@ -96,7 +96,7 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
 4. Que el endpoint siga dentro del scope.
 5. Que el módulo esté mapeado al plugin del hallazgo.
 
-Cada ejecución se registra en `exploit_runs` y en el audit log. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
+Cada ejecución se registra en `exploit_runs` y en el audit log. `exploit/trace.py` captura cada petición y respuesta en un contextvar, y `services/evidence.py` genera la justificación, los comandos de reproducción y el hash SHA-256. La evidencia se muestra en el panel, se exporta en Markdown/JSON y se incorpora a los informes. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
 
 ## Herramientas Docker
 

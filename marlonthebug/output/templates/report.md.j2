@@ -76,6 +76,19 @@
 {{ finding.evidence|tojson(indent=2) }}
 ```
 {% endif %}
+{% set successful_runs = finding.exploit_runs|selectattr('status', 'equalto', 'success')|list %}
+{% if successful_runs -%}
+**{{ 'Validación de explotación' if language == 'es' else 'Exploitation validation' }}:**
+
+| {{ 'Módulo' if language == 'es' else 'Module' }} | {{ 'Riesgo' if language == 'es' else 'Risk' }} | {{ 'Fecha' if language == 'es' else 'Date' }} | Hash |
+|---|---|---|---|
+{% for run in successful_runs -%}
+| {{ run.module_name }} | {{ run.risk }} | {{ run.finished_at or run.created_at }} | `{{ run.evidence.get('integrity', {}).get('hash', '—') }}` |
+{% endfor %}
+```text
+{{ successful_runs[0].output[:1200] }}
+```
+{% endif %}
 {% if include_remediation and finding.remediation -%}
 **{{ 'Remediación' if language == 'es' else 'Remediation' }}:** {{ finding.remediation }}
 {% endif %}

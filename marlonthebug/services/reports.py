@@ -350,6 +350,19 @@ class ReportService:
                     "kev": finding.kev,
                     "epss": finding.epss,
                     "verified": finding.verified,
+                    "exploit_runs": [
+                        {
+                            "module": run.module_name,
+                            "status": run.status,
+                            "risk": run.risk,
+                            "output": run.output[:2000],
+                            "evidence": run.evidence,
+                            "started_at": run.started_at.isoformat() if run.started_at else None,
+                            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                        }
+                        for run in (finding.exploit_runs or [])
+                        if run.status == "success"
+                    ],
                 }
                 for finding in context["findings"]
             ],

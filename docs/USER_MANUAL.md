@@ -91,7 +91,7 @@ La explotación se habilita por proyecto. En **Proyectos → Alcance**, activa *
 3. Escribe `EXPLOTAR` y ejecuta.
 4. Revisa la evidencia en la pantalla de la ejecución.
 
-Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de ficheros de prueba, RCE con `id`/`whoami`, SSTI `7*7`, SSRF a metadata/loopback y open redirect canario. No hay shells inversas ni persistencia por defecto.
+Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de ficheros de prueba, RCE con `id`/`whoami`, SSTI aritmético, SSRF a metadata/loopback y open redirect canario. No hay shells inversas ni persistencia por defecto. Cada ejecución guarda la traza de peticiones/respuestas, la justificación, los comandos de reproducción y un hash SHA-256. Puedes descargar la evidencia en Markdown o JSON desde la pantalla de la ejecución.
 
 En el formulario de análisis, **Seleccionar todos** marca todos los módulos; **Limpiar** los desmarca.
 

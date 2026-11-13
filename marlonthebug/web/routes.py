@@ -15,12 +15,14 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
+    JSONResponse,
     RedirectResponse,
     Response,
     StreamingResponse,
 )
 
 from marlonthebug.db.models import ScanRunModel
+from marlonthebug.services.evidence import to_markdown
 from marlonthebug.services.exploitation import ExploitBlocked
 from marlonthebug.services.reports import ReportRequest
 from marlonthebug.services.scanner import PROFILES
@@ -654,6 +656,41 @@ async def exploit_detail(request: Request, run_id: str):
         nav="exploits",
         workspace_id=run.workspace_id,
         run=run,
+    )
+
+
+@router.get("/exploits/{run_id}/evidence.md")
+async def exploit_evidence_markdown(request: Request, run_id: str):
+    run = await get_repo(request).get_exploit_run(run_id)
+    if not run:
+        raise HTTPException(404, "Ejecución de explotación no encontrada")
+    content = to_markdown(run)
+    return Response(
+        content=content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="evidencia-{run.id[:8]}.md"'},
+    )
+
+
+@router.get("/exploits/{run_id}/evidence.json")
+async def exploit_evidence_json(request: Request, run_id: str):
+    run = await get_repo(request).get_exploit_run(run_id)
+    if not run:
+        raise HTTPException(404, "Ejecución de explotación no encontrada")
+    return JSONResponse(
+        {
+            "id": run.id,
+            "module": run.module_name,
+            "status": run.status,
+            "risk": run.risk,
+            "payload": run.payload,
+            "output": run.output,
+            "error": run.error,
+            "evidence": run.evidence,
+            "operator": run.operator,
+            "started_at": serializers.iso(run.started_at),
+            "finished_at": serializers.iso(run.finished_at),
+        }
     )
 
 

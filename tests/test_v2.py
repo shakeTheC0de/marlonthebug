@@ -27,6 +27,7 @@ from marlonthebug.paths import AppPaths
 from marlonthebug.plugins.api.jwt import JWTAuditor
 from marlonthebug.plugins.recon.endpoint_discovery import _content_is_valid
 from marlonthebug.plugins.recon.supply_chain import SupplyChainAuditor
+from marlonthebug.services.evidence import build_justification, finalize_evidence, to_markdown
 from marlonthebug.services.exploitation import ExploitationService, ExploitBlocked
 from marlonthebug.services.intel import IntelService
 from marlonthebug.services.reports import ReportRequest, ReportService
@@ -403,3 +404,76 @@ async def test_exploitation_requires_workspace_flag(app_paths: AppPaths) -> None
             await service.run(finding.id, "webapp/xss_exploit", "EXPLOTAR")
     finally:
         await database.close()
+
+
+def test_exploitation_evidence_contains_trace_and_hash() -> None:
+    from types import SimpleNamespace
+
+    finding = SimpleNamespace(
+        id="finding-1",
+        title="XSS en q",
+        plugin_name="xss",
+        severity="high",
+        cvss_score=7.2,
+        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+        cwe="CWE-79",
+        owasp="A03:2021 Injection",
+        endpoint="https://example.com/?q=test",
+        target_host="example.com",
+        target=None,
+        evidence={"parameter": "q", "payload": "<svg/onload=alert(1)>"},
+        remediation="Codifica la salida.",
+        description="Prueba",
+        kev=False,
+        epss=0.0,
+    )
+    workspace = SimpleNamespace(
+        id="workspace-1",
+        name="demo",
+        allow_exploitation=True,
+        scope={"allowed_domains": ["example.com"]},
+    )
+    steps = [
+        {
+            "index": 1,
+            "phase": "http_request",
+            "at": "2026-11-13T00:00:00Z",
+            "method": "GET",
+            "url": "https://example.com/?q=%3Csvg%2Fonload%3Dalert(1)%3E",
+            "request_headers": {},
+            "request_body": "",
+            "status": 200,
+            "response_headers": {},
+            "response_snippet": "<svg/onload=alert(1)>",
+            "elapsed": 0.1,
+            "content_length": 100,
+        }
+    ]
+    justification = build_justification(
+        finding=finding,
+        module_key="webapp/xss_exploit",
+        risk="low",
+        status="success",
+        trace_steps=steps,
+        output="XSS confirmado",
+        operator="tester",
+        workspace=workspace,
+    )
+    evidence = finalize_evidence({"reflected": True}, justification, steps)
+    assert evidence["integrity"]["algorithm"] == "sha256"
+    assert len(evidence["integrity"]["hash"]) == 64
+    run = SimpleNamespace(
+        module_name="xss_exploit",
+        status="success",
+        risk="low",
+        operator="tester",
+        started_at=None,
+        finished_at=None,
+        output="XSS confirmado",
+        error="",
+        evidence=evidence,
+    )
+    markdown = to_markdown(run)
+    assert "Proceso paso a paso" in markdown
+    assert "SHA" not in markdown or "sha256" in markdown
+    assert "webapp/xss_exploit" in markdown or "xss_exploit" in markdown

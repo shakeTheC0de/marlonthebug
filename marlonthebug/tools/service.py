@@ -12,8 +12,10 @@ from typing import Any
 from marlonthebug.core.scope import ScopeGuard, scope_from_workspace
 from marlonthebug.db.models import ExploitRunModel, FindingModel
 from marlonthebug.db.repository import Repository
+from marlonthebug.exploit.trace import TraceRecorder, reset_trace, set_trace
 from marlonthebug.exploit.webapp.utils import endpoint_candidates, is_edge_error
 from marlonthebug.paths import AppPaths, package_dir
+from marlonthebug.services.evidence import build_justification, finalize_evidence
 from marlonthebug.services.exploitation import CONFIRMATION_WORDS, ExploitBlocked
 from marlonthebug.settings import AppSettings
 from marlonthebug.tools.catalog import build_command, tool_by_key, tools_for_plugin
@@ -89,6 +91,7 @@ class ToolService:
         guard = ScopeGuard(scope)
         if not scope.is_url_allowed(target_url):
             guard.require(target_url)
+        requested_url = target_url
         resolved_url = await self._resolve_url(target_url)
         if resolved_url != target_url:
             args = [item.replace(target_url, resolved_url) for item in args]
@@ -103,6 +106,26 @@ class ToolService:
             ]
         target_url = container_url
 
+        recorder = TraceRecorder(
+            metadata={
+                "finding_id": finding.id,
+                "tool": tool.key,
+                "image": self.settings.tools.docker_image,
+                "operator": operator,
+                "workspace": workspace.name,
+            }
+        )
+        recorder.note(
+            "authorization",
+            "Herramienta autorizada por el operador y el alcance del proyecto",
+            {"workspace": workspace.name, "confirmation": "EXPLOTAR", "target": target_url},
+        )
+        recorder.note(
+            "preflight",
+            "Resolución de URL y preparación del contenedor",
+            {"requested": requested_url, "resolved": target_url, "docker_image": self.settings.tools.docker_image},
+        )
+        token = set_trace(recorder)
         run = await self.repository.create_exploit_run(
             workspace_id=workspace.id,
             finding_id=finding.id,
@@ -123,11 +146,38 @@ class ToolService:
         try:
             result = await self.runner.run(tool.key, args, target_url)
             status = "success" if result.success else "failed"
+            recorder.steps.append(
+                {
+                    "index": len(recorder.steps) + 1,
+                    "phase": "docker",
+                    "at": datetime.now(UTC).isoformat(),
+                    "tool": tool.key,
+                    "command": " ".join(result.command),
+                    "returncode": result.evidence.get("returncode"),
+                    "duration": result.duration,
+                    "message": result.evidence.get("classification", ""),
+                }
+            )
+            recorder.note("result", f"Resultado de la herramienta: {status}", {"success": result.success})
+            evidence = finalize_evidence(
+                result.evidence,
+                build_justification(
+                    finding=finding,
+                    module_key=f"docker/{tool.key}",
+                    risk=tool.risk,
+                    status=status,
+                    trace_steps=recorder.steps,
+                    output=result.output or result.error,
+                    operator=operator,
+                    workspace=workspace,
+                ),
+                recorder.steps,
+            )
             await self.repository.update_exploit_run(
                 run.id,
                 status=status,
                 output=result.output,
-                evidence=result.evidence,
+                evidence=evidence,
                 error=result.error,
                 finished_at=datetime.now(UTC),
                 cleanup_status="container_removed",
@@ -150,12 +200,30 @@ class ToolService:
             )
         except Exception as exc:
             logger.exception("Tool execution failed for finding %s", finding.id)
+            recorder.note("error", str(exc))
+            evidence = finalize_evidence(
+                {"error": str(exc)},
+                build_justification(
+                    finding=finding,
+                    module_key=f"docker/{tool.key}",
+                    risk=tool.risk,
+                    status="failed",
+                    trace_steps=recorder.steps,
+                    output=str(exc),
+                    operator=operator,
+                    workspace=workspace,
+                ),
+                recorder.steps,
+            )
             await self.repository.update_exploit_run(
                 run.id,
                 status="failed",
                 error=str(exc),
+                evidence=evidence,
                 finished_at=datetime.now(UTC),
             )
+        finally:
+            reset_trace(token)
         return await self.repository.get_exploit_run(run.id) or run
 
     async def _resolve_url(self, url: str) -> str:
