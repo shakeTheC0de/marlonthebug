@@ -41,7 +41,7 @@ class SSTIAuditor(BasePlugin):
         base_url = str(options.get("base_url") or f"https://{target.host}").rstrip("/")
         endpoints = list(options.get("endpoints") or [])
         http = AsyncHTTPClient()
-        reported: set[tuple[str, str]] = set()
+        reported: set[tuple[str, str, str]] = set()
         try:
             urls = [url for url in endpoints if "?" in url and "=" in url]
             for param in TEMPLATE_PARAMS:
@@ -56,7 +56,9 @@ class SSTIAuditor(BasePlugin):
                 except Exception:
                     continue
                 for param in list(params.keys())[:6]:
-                    if (url, param) in reported:
+                    parsed_base = urlparse(url)
+                    report_key = (parsed_base.netloc, parsed_base.path.rstrip("/"), param)
+                    if report_key in reported:
                         continue
                     a = random.randint(13, 97)
                     b = random.randint(13, 97)
@@ -77,7 +79,7 @@ class SSTIAuditor(BasePlugin):
                         if payload in response.body:
                             # The server echoed the payload without evaluating it.
                             continue
-                        reported.add((url, param))
+                        reported.add(report_key)
                         yield self.create_finding(
                             title=f"SSTI en '{param}' — {label}",
                             description=(
