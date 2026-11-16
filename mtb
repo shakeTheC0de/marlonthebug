@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# MarlonTheBug — lanzador único para el stack portátil.
+# Uso: ./mtb [up|open|status|doctor|logs|down|restart|update|backup|restore|lab|shell|token|url|install|build|version]
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+ENV_FILE=".env"
+COMPOSE=(docker compose)
+LAB_COMPOSE=(docker compose -f docker-compose.lab.yml)
+
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
+red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+
+generate_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import secrets; print(secrets.token_hex(32))'
+  else
+    red "Necesitas openssl o python3 para generar tokens."
+    exit 1
+  fi
+}
+
+ensure_env() {
+  if [ ! -f "$ENV_FILE" ]; then
+    cp .env.example "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    green "Creado .env desde .env.example"
+  fi
+  for key in MTB_TOOLS_TOKEN MTB_EXPLOIT_TOKEN; do
+    value="$(grep -E "^${key}=" "$ENV_FILE" | cut -d= -f2- || true)"
+    if [ -z "$value" ]; then
+      token="$(generate_token)"
+      sed -i.bak "s/^${key}=.*/${key}=${token}/" "$ENV_FILE"
+      rm -f "${ENV_FILE}.bak"
+      green "Generado ${key}"
+    fi
+  done
+  chmod 600 "$ENV_FILE"
+}
+
+load_env() {
+  ensure_env
+  set -a
+  # shellcheck disable=SC1090
+  . "./${ENV_FILE}"
+  set +a
+}
+
+ensure_docker() {
+  if [ -n "$(docker info --format '{{.ServerVersion}}' 2>/dev/null || true)" ]; then
+    return 0
+  fi
+  yellow "Docker no está listo; intentando arrancar Docker Desktop…"
+  if [ "$(uname -s)" = "Darwin" ] && [ -d "/Applications/Docker.app" ]; then
+    open -a Docker
+  fi
+  for _ in $(seq 1 80); do
+    if [ -n "$(docker info --format '{{.ServerVersion}}' 2>/dev/null || true)" ]; then
+      green "Docker listo."
+      return 0
+    fi
+    sleep 3
+  done
+  red "Docker no arrancó. Abre Docker Desktop y vuelve a intentarlo."
+  exit 1
+}
+
+panel_port() { printf '%s' "${MTB_PANEL_PORT:-8765}"; }
+panel_url() {
+  local token
+  token="$(cat "${MTB_DATA_DIR:-./mtb-data}/panel.token" 2>/dev/null || true)"
+  if [ -n "$token" ]; then
+    printf 'http://127.0.0.1:%s/?token=%s' "$(panel_port)" "$token"
+  else
+    printf 'http://127.0.0.1:%s/' "$(panel_port)"
+  fi
+}
+
+open_browser() {
+  local url
+  url="$(panel_url)"
+  case "$(uname -s)" in
+    Darwin) open "$url" ;;
+    Linux) xdg-open "$url" >/dev/null 2>&1 || echo "$url" ;;
+    MINGW*|MSYS*|CYGWIN*) cmd.exe /c start "$url" >/dev/null 2>&1 || echo "$url" ;;
+    *) echo "$url" ;;
+  esac
+}
+
+wait_panel() {
+  local port
+  port="$(panel_port)"
+  for _ in $(seq 1 90); do
+    if curl -fsS "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  red "El panel no respondió. Revisa: ./mtb logs panel"
+  return 1
+}
+
+cmd_up() {
+  load_env
+  ensure_docker
+  "${COMPOSE[@]}" up -d
+  if wait_panel; then
+    green "MarlonTheBug listo."
+    echo "  Panel: $(panel_url)"
+    echo "  Datos: ${MTB_DATA_DIR:-./mtb-data}"
+    echo "  Logs:  ./mtb logs panel"
+  fi
+}
+
+cmd_install() {
+  ensure_docker
+  ./scripts/install.sh
+}
+
+cmd_build() {
+  load_env
+  ensure_docker
+  "${COMPOSE[@]}" build
+}
+
+cmd_open() {
+  load_env
+  open_browser
+}
+
+cmd_status() {
+  load_env
+  "${COMPOSE[@]}" ps
+  echo
+  if curl -fsS "http://127.0.0.1:$(panel_port)/healthz" 2>/dev/null; then
+    echo
+  else
+    yellow "Panel no responde en 127.0.0.1:$(panel_port)"
+  fi
+}
+
+cmd_doctor() {
+  load_env
+  echo "MarlonTheBug doctor"
+  echo "-------------------"
+  echo "Sistema: $(uname -s) $(uname -m)"
+  if docker info --format 'Docker {{.ServerVersion}}' 2>/dev/null; then :; else red "Docker no disponible"; fi
+  if docker compose version 2>/dev/null; then :; else red "Docker Compose v2 no disponible"; fi
+  if [ -f "$ENV_FILE" ]; then
+    green ".env presente"
+    grep -E '^MTB_(TOOLS|EXPLOIT)_TOKEN=' "$ENV_FILE" | sed 's/=.*/=<set>/'
+  else
+    red ".env ausente"
+  fi
+  [ -d "${MTB_DATA_DIR:-./mtb-data}" ] && green "Directorio de datos: ${MTB_DATA_DIR:-./mtb-data}" || yellow "Directorio de datos aún no creado"
+  if curl -fsS "http://127.0.0.1:$(panel_port)/healthz" >/dev/null 2>&1; then
+    green "Panel healthy en 127.0.0.1:$(panel_port)"
+  else
+    yellow "Panel no responde; ejecuta ./mtb up"
+  fi
+  echo
+  "${COMPOSE[@]}" ps
+  echo
+  df -h . | tail -1
+}
+
+cmd_logs() {
+  load_env
+  local service="${1:-panel}"
+  "${COMPOSE[@]}" logs -f --tail=100 "$service"
+}
+
+cmd_down() {
+  load_env
+  "${COMPOSE[@]}" down
+  green "Stack detenido. Datos conservados en ${MTB_DATA_DIR:-./mtb-data}."
+}
+
+cmd_restart() {
+  cmd_down
+  cmd_up
+}
+
+cmd_update() {
+  load_env
+  ensure_docker
+  if [ -d .git ]; then
+    git pull --ff-only
+  fi
+  "${COMPOSE[@]}" pull || true
+  "${COMPOSE[@]}" up -d --build
+  wait_panel && green "Actualizado. $(panel_url)"
+}
+
+cmd_backup() { ensure_env; ./scripts/backup.sh; }
+cmd_restore() { ensure_env; ./scripts/restore.sh "$@"; }
+
+cmd_lab() {
+  ensure_docker
+  case "${1:-up}" in
+    up) "${LAB_COMPOSE[@]}" up -d juice-shop webgoat; echo "Juice Shop: http://127.0.0.1:3000"; echo "WebGoat:    http://127.0.0.1:8080/WebGoat" ;;
+    tools) "${LAB_COMPOSE[@]}" run --rm lab-tools ;;
+    status) "${LAB_COMPOSE[@]}" ps ;;
+    down) "${LAB_COMPOSE[@]}" down ;;
+    reset) "${LAB_COMPOSE[@]}" down -v; "${LAB_COMPOSE[@]}" up -d juice-shop webgoat ;;
+    *) red "Uso: ./mtb lab [up|tools|status|down|reset]"; exit 1 ;;
+  esac
+}
+
+cmd_shell() { load_env; "${COMPOSE[@]}" exec panel bash; }
+cmd_token() { load_env; cat "${MTB_DATA_DIR:-./mtb-data}/panel.token"; echo; }
+cmd_url() { load_env; panel_url; echo; }
+
+cmd_help() {
+  cat <<'EOF'
+MarlonTheBug — lanzador portátil
+
+  ./mtb install       Instalación inicial (genera tokens, construye/descarga y arranca)
+  ./mtb up            Arranca el stack y abre el panel
+  ./mtb open          Abre el panel en el navegador
+  ./mtb status        Estado de servicios y health
+  ./mtb doctor        Diagnóstico de Docker, .env, datos, salud y disco
+  ./mtb logs [svc]    Logs en vivo (panel, tools-runner, exploit-runner)
+  ./mtb down          Para el stack conservando datos
+  ./mtb restart       Reinicia el stack
+  ./mtb update        git pull + pull/build + reinicio
+  ./mtb build         Construye las imágenes locales
+  ./mtb backup        Backup consistente de ./mtb-data
+  ./mtb restore FILE  Restaura un backup
+  ./mtb lab [up|tools|status|down|reset]
+  ./mtb shell         Shell dentro del panel
+  ./mtb token         Muestra el token del panel
+  ./mtb url           Muestra la URL con token
+  ./mtb version       Versión del lanzador
+EOF
+}
+
+case "${1:-help}" in
+  install) cmd_install ;;
+  up) cmd_up; open_browser ;;
+  open) cmd_open ;;
+  status) cmd_status ;;
+  doctor) cmd_doctor ;;
+  logs) shift; cmd_logs "$@" ;;
+  down) cmd_down ;;
+  restart) cmd_restart ;;
+  update) cmd_update ;;
+  build) cmd_build ;;
+  backup) cmd_backup ;;
+  restore) shift; cmd_restore "$@" ;;
+  lab) shift; cmd_lab "$@" ;;
+  shell) cmd_shell ;;
+  token) cmd_token ;;
+  url) cmd_url ;;
+  version) echo "mtb launcher 1.0 (MarlonTheBug 2.0)" ;;
+  help|-h|--help) cmd_help ;;
+  *) red "Comando no reconocido: $1"; cmd_help; exit 1 ;;
+esac

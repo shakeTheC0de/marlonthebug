@@ -42,6 +42,20 @@ El script:
 5. Descarga las imágenes de GHCR o las construye localmente.
 6. Espera al healthcheck y muestra la URL con token.
 
+Para el día a día usa el lanzador:
+
+```bash
+./mtb up          # arranca Docker si hace falta y abre el panel
+./mtb status
+./mtb doctor
+./mtb logs panel
+./mtb down
+./mtb update
+./mtb backup
+./mtb lab up
+./mtb lab tools
+```
+
 También puedes hacerlo a mano:
 
 ```bash
