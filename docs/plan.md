@@ -16,6 +16,7 @@
 | 9. Herramientas Docker | ✅ | Imagen Kali con sqlmap, nuclei, commix, whatweb, nikto, nmap; ejecución aislada y conectada al panel |
 | 10. Stack portable | ✅ | `docker compose` panel + tools-runner + exploit-runner, sin socket en el panel, backends remote/docker/local, tokens y red interna |
 | 11. Operación | ✅ | `marlonthebug backup`/`restore`, scripts de backup/instalación, imágenes GHCR multiarquitectura |
+| 12. Laboratorio | ✅ | Juice Shop + WebGoat + Kali/Metasploit aislados, `scripts/lab.sh`, integración con el panel vía `host.docker.internal` |
 
 ## Principios
 

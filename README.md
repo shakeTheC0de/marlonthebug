@@ -88,6 +88,19 @@ docker compose logs -f panel  # token y URL
 ./scripts/backup.sh           # backup consistente
 ```
 
+### Laboratorio de práctica
+
+```bash
+./scripts/lab.sh up       # Juice Shop + WebGoat en 127.0.0.1
+./scripts/lab.sh tools    # Kali + Metasploit + sqlmap/nmap/ffuf...
+./scripts/lab.sh down     # parar
+./scripts/lab.sh reset    # recrear limpio
+```
+
+Es un entorno desechable para practicar con frameworks establecidos y
+objetivos vulnerables. No forma parte del stack de producción. Guía:
+[`docs/LAB.md`](docs/LAB.md).
+
 ---
 
 ## Primer arranque

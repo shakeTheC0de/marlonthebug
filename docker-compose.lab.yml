@@ -1,0 +1,42 @@
+name: marlonthebug-lab
+
+# Laboratorio aislado de práctica. No forma parte del stack de producción.
+# Los objetivos solo son accesibles desde la red `lab` y desde 127.0.0.1.
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: mtb-lab-juice
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - lab
+
+  webgoat:
+    image: webgoat/webgoat:latest
+    container_name: mtb-lab-webgoat
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - lab
+
+  lab-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.lab-tools
+    image: marlonthebug/lab-tools:latest
+    container_name: mtb-lab-tools
+    profiles: ["tools"]
+    stdin_open: true
+    tty: true
+    working_dir: /work
+    volumes:
+      - ./lab/loot:/loot
+    networks:
+      - lab
+    command: ["bash"]
+
+networks:
+  lab:
+    driver: bridge

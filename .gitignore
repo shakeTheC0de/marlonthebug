@@ -17,6 +17,7 @@ htmlcov/
 # ── Runtime data (never commit) ──────────────────────────
 data/
 mtb-data/
+lab/
 backups/
 workspaces/
 reports/
