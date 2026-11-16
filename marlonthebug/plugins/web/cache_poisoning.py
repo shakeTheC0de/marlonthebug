@@ -57,9 +57,11 @@ class CachePoisoningAuditor(BasePlugin):
                     if baseline and baseline.looks_like_app_shell(response):
                         continue
                     reflected = canary in response.body or canary in str(response.headers)
-                    cached = _is_cached(response)
-                    if not reflected and not cached:
+                    if not reflected:
+                        # A cache header alone (often cf-cache-status: MISS on
+                        # static assets) is not evidence of poisoning.
                         continue
+                    cached = _is_cached(response)
                     yield self.create_finding(
                         title=f"Posible cache poisoning mediante {header}",
                         description=(
@@ -94,7 +96,7 @@ class CachePoisoningAuditor(BasePlugin):
 
 def _is_cached(response: Any) -> bool:
     cf = response.header("cf-cache-status").lower()
-    if cf in {"hit", "miss", "expired", "stale", "revalidated"}:
+    if cf in {"hit", "expired", "stale", "revalidated"}:
         return True
     xcache = response.header("x-cache").lower()
     if "hit" in xcache or "miss" in xcache:

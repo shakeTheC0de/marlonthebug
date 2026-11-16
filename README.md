@@ -294,7 +294,7 @@ Genera el par de claves una vez con `marlonthebug intel keygen --private signing
 
 | Categoría | Módulos |
 |---|---|
-| Reconocimiento | subdominios, DNS, fingerprint con versiones, endpoints, JS, secretos, `.git`, auth bypass, supply chain |
+| Reconocimiento | subdominios, DNS, fingerprint con versiones, endpoints, JS, secretos, `.git`, OpenAPI/Swagger expuesto, auth bypass, supply chain |
 | Web | SQLi, XSS, SSRF, CSRF, LFI/RFI, path traversal, file upload, SSTI, RCE, command injection, deserialización, smuggling, race conditions, lógica de negocio, WAF bypass, prototype pollution, cache poisoning |
 | API | JWT, OAuth/OIDC, BOLA/IDOR, mass assignment, GraphQL |
 | Cloud / CI-CD | dashboards y APIs cloud expuestas, pipelines y manifiestos públicos |

@@ -22,14 +22,21 @@ SINKS = [
     (r"\b_\.merge\s*\(", "lodash.merge"),
     (r"\bmerge\s*\(\s*\{?\s*\.\.\.", "merge con spread"),
     (r"deepMerge\s*\(", "deepMerge"),
-    (r"\[[^\]]+\]\s*=\s*[^=]", "asignación dinámica de propiedades"),
 ]
+PROTO_KEYS = re.compile(r"(__proto__|constructor\s*\[?\s*['\"]?prototype|prototype\s*\[)", re.IGNORECASE)
 USER_INPUT = re.compile(r"(location\.(hash|search)|URLSearchParams|document\.cookie|postMessage)", re.IGNORECASE)
 PAYLOADS = {
     "__proto__[mtb_polluted]": "mtb",
     "constructor[prototype][mtb_polluted]": "mtb",
     "mtb_polluted": "mtb",
 }
+
+
+def has_proto_sink(body: str) -> bool:
+    """Require an explicit prototype key, not just any dynamic assignment."""
+    if not PROTO_KEYS.search(body):
+        return False
+    return any(re.search(pattern, body) for pattern, _label in SINKS)
 
 
 class PrototypePollutionAuditor(BasePlugin):
@@ -68,6 +75,8 @@ class PrototypePollutionAuditor(BasePlugin):
                 except Exception:
                     continue
                 if response.status_code != 200 or len(response.body) < 200:
+                    continue
+                if not has_proto_sink(response.body):
                     continue
                 for pattern, label in SINKS:
                     if not re.search(pattern, response.body):

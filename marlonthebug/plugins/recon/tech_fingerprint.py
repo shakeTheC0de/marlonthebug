@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
+from marlonthebug.http.errors import is_edge_error
 from marlonthebug.plugins.base import BasePlugin, Confidence, Finding, Severity
 
 if TYPE_CHECKING:
@@ -142,6 +143,8 @@ class TechFingerprinter(BasePlugin):
             try:
                 response = await http.get(base_url)
             except Exception:
+                return
+            if is_edge_error(response):
                 return
             detected = self._analyze(response.body, response.headers)
             technologies = [self._label(item) for item in detected]

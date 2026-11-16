@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from marlonthebug.http.client import AsyncHTTPClient
+from marlonthebug.http.errors import is_edge_error
 from marlonthebug.plugins.base import BasePlugin, Finding, Severity
 
 if TYPE_CHECKING:
@@ -74,6 +75,8 @@ class JSAnalyzer(BasePlugin):
             else:
                 return
 
+            if is_edge_error(response):
+                return
             body = response.body
             from bs4 import BeautifulSoup
 
@@ -145,6 +148,8 @@ class JSAnalyzer(BasePlugin):
     ) -> AsyncIterator[Finding]:
         try:
             response = await http.get(url)
+            if is_edge_error(response):
+                return
             for pattern, label in ENDPOINT_PATTERNS:
                 for match in re.finditer(pattern, response.body):
                     value = match.group(1)

@@ -94,6 +94,7 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
   confianza alta; si no hay versión mapeable o NVD no responde, se usa el índice
   local por palabra clave con confianza baja.
 - **OSV**: consulta por ecosistema/paquete/versión desde supply chain.
+- **OpenAPI/Swagger**: detecta especificaciones expuestas, registra el hallazgo y añade sus rutas al contexto del análisis.
 - **Frescura**: ETag/Last-Modified por feed, última y próxima sincronización,
   error y marca de desactualizado.
 - **Offline**: exportación/importación de bundles JSON con firma Ed25519
