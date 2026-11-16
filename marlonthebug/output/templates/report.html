@@ -396,6 +396,34 @@
     <dt>OWASP</dt><dd>{{ 'Marco de referencia para riesgos de seguridad de aplicaciones.' if language == 'es' else 'Application security risk framework.' }}</dd>
   </dl>
 
+  <h3>{{ 'Anexo B. Inteligencia de vulnerabilidades' if language == 'es' else 'Appendix B. Vulnerability intelligence' }}</h3>
+  <p class="small">
+    {% if language == 'es' %}
+    Fuentes consultadas durante el análisis. La fecha de consulta es la del presente informe; los feeds pueden haber cambiado desde entonces.
+    {% else %}
+    Sources consulted during the assessment. The consultation date is the report date; feeds may have changed since then.
+    {% endif %}
+  </p>
+  {% if intel_sources %}
+  <table>
+    <thead><tr><th>{{ 'Fuente' if language == 'es' else 'Source' }}</th><th>{{ 'Estado' if language == 'es' else 'Status' }}</th><th>{{ 'Registros' if language == 'es' else 'Records' }}</th><th>{{ 'Última sync' if language == 'es' else 'Last sync' }}</th></tr></thead>
+    <tbody>
+      {% for feed in intel_sources %}
+      <tr><td>{{ feed.name }}</td><td>{{ feed.status }}</td><td>{{ feed.count }}</td><td>{{ feed.last_sync.strftime('%d/%m/%Y %H:%M UTC') if feed.last_sync else '—' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="small">{{ 'No se sincronizaron feeds de inteligencia; la priorización se basa en el CVSS local.' if language == 'es' else 'No intelligence feeds were synchronized; prioritization relies on local CVSS.' }}</p>
+  {% endif %}
+  <p class="small">
+    {% if language == 'es' %}
+    Limitaciones: KEV, EPSS y NVD son fuentes externas con latencia y cobertura variable. La correlación CPE depende de la versión detectada y puede no encontrar CVEs si el producto no expone su versión. Este anexo no sustituye la validación manual ni una revisión de parches del proveedor.
+    {% else %}
+    Limitations: KEV, EPSS and NVD are external sources with variable latency and coverage. CPE correlation depends on the detected version and may miss CVEs when the product does not expose it. This appendix does not replace manual validation or the vendor's patch review.
+    {% endif %}
+  </p>
+
   <h3>{{ 'Declaración' if language == 'es' else 'Statement' }}</h3>
   <p class="small">
     {% if language == 'es' %}

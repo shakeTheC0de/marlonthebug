@@ -50,7 +50,7 @@ def _sqlmap(url: str, finding: Any) -> list[str]:
         "--timeout=10",
         "--retries=1",
         "--flush-session",
-        "--output-dir=/work",
+        "--output-dir=.",
     ]
 
 

@@ -38,16 +38,24 @@
     {% if intel %}
     <div class="table-wrap">
       <table class="table compact">
-        <thead><tr><th>CVE</th><th>Producto</th><th>Versión</th><th>Confianza</th></tr></thead>
+        <thead><tr><th>CVE</th><th>Producto</th><th>Versión</th><th>CVSS</th><th>KEV</th><th>EPSS</th><th>Confianza</th></tr></thead>
         <tbody>
         {% for match in intel %}
-        <tr><td class="mono"><a class="link" href="/intel?q={{ match.cve_id }}">{{ match.cve_id }}</a></td><td>{{ match.product }}</td><td class="mono">{{ match.version or '—' }}</td><td>{{ match.confidence }}</td></tr>
+        <tr>
+          <td class="mono"><a class="link" href="/intel?q={{ match.cve_id }}">{{ match.cve_id }}</a></td>
+          <td>{{ match.product }}</td>
+          <td class="mono">{{ match.version or '—' }}</td>
+          <td class="mono">{{ '%.1f'|format(match.cvss_score) if match.cvss_score else '—' }}</td>
+          <td>{% if match.kev %}<span class="tag tag-kev">KEV</span>{% else %}—{% endif %}</td>
+          <td class="mono">{{ '%.1f%%'|format(match.epss * 100) if match.epss else '—' }}</td>
+          <td>{{ match.confidence }}{% if match.match_type == 'cpe' %} <span class="muted small">CPE</span>{% endif %}</td>
+        </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
     {% else %}
-      <p class="muted">Sin coincidencias locales. Sincroniza la inteligencia y ejecuta la búsqueda para correlacionar tecnologías y versiones.</p>
+      <p class="muted">Sin coincidencias. Sincroniza la inteligencia y ejecuta la búsqueda para correlacionar tecnologías y versiones mediante CPE.</p>
     {% endif %}
   </section>
 </div>

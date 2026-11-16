@@ -111,6 +111,18 @@ class ReportService:
         counts["categories"] = category_counts
         target_hosts = sorted({finding.target_host for finding in findings if finding.target_host})
         risk = self._risk_label(severity)
+        feeds = await self.repository.list_feeds()
+        intel_sources = [
+            {
+                "name": feed.name,
+                "source": feed.source,
+                "status": feed.status,
+                "count": feed.count,
+                "last_sync": feed.last_sync,
+                "error": feed.error,
+            }
+            for feed in feeds
+        ]
         return {
             "workspace": workspace,
             "scan": scan,
@@ -118,6 +130,7 @@ class ReportService:
             "stats": counts,
             "risk": risk,
             "target_hosts": target_hosts,
+            "intel_sources": intel_sources,
             "generated_at": datetime.now(UTC),
             "generated_at_text": datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC"),
             "request": request,
@@ -328,6 +341,13 @@ class ReportService:
             "classification": context["classification"],
             "risk": context["risk"],
             "stats": context["stats"],
+            "intel_sources": [
+                {
+                    **item,
+                    "last_sync": item["last_sync"].isoformat() if item.get("last_sync") else "",
+                }
+                for item in context.get("intel_sources", [])
+            ],
             "findings": [
                 {
                     "plugin": finding.plugin_name,

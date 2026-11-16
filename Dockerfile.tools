@@ -1,10 +1,21 @@
-# Kali Linux tools image for MarlonTheBug controlled exploitation.
-# Build: docker build -f Dockerfile.tools -t marlonthebug/kali-tools:latest .
-# The container is ephemeral, drops capabilities and has no host mounts except /work.
+# Kali Linux tools image for MarlonTheBug.
+#
+# It has two roles:
+#   1. Ephemeral container for the legacy `docker` backend:
+#      docker run --rm ... IMAGE sqlmap -u ...
+#   2. Long-running `tools-runner` service used by docker compose:
+#      python3 -m marlonthebug.tools.runner_api
+#
+# The Compose stack runs it as uid 10001 with a read-only root filesystem and a
+# writable tmpfs at /work. The image stays root by default so the ephemeral
+# backend remains compatible with host-mounted work directories.
 FROM kalilinux/kali-rolling
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/mtb \
+    MTB_TOOLS_WORKDIR=/work
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -20,11 +31,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gobuster \
         hydra \
         dnsutils \
+        python3 \
+        python3-pip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Keep nuclei templates current at build time; ignore failures on restricted networks.
-RUN nuclei -update-templates >/dev/null 2>&1 || true
+# FastAPI/uvicorn are only needed by the tools-runner service.
+RUN pip3 install --no-cache-dir --break-system-packages \
+        "fastapi>=0.115,<1" \
+        "uvicorn>=0.32,<1"
+
+# Small standalone service: no panel dependencies, no Docker socket.
+RUN mkdir -p /opt/mtb/marlonthebug/tools
+COPY marlonthebug/__init__.py /opt/mtb/marlonthebug/__init__.py
+COPY marlonthebug/tools/runner_api.py marlonthebug/tools/proc.py /opt/mtb/marlonthebug/tools/
+RUN touch /opt/mtb/marlonthebug/tools/__init__.py
+
+RUN useradd --create-home --uid 10001 mtb \
+    && mkdir -p /work \
+    && chown mtb:mtb /work
+
+# Keep nuclei templates current at build time; install them in a location that
+# the unprivileged runner can read. Ignore failures on restricted networks.
+RUN HOME=/home/mtb nuclei -update-templates >/dev/null 2>&1 || true
+RUN chown -R mtb:mtb /home/mtb /work
 
 WORKDIR /work
-CMD ["bash"]
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=8s --start-period=15s --retries=5 \
+    CMD ["curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+
+# Starting the container without arguments runs the tools-runner service.
+# Passing a command (sqlmap, nuclei, ...) keeps the legacy ephemeral behaviour.
+CMD ["python3", "-m", "marlonthebug.tools.runner_api"]

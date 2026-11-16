@@ -68,19 +68,32 @@ El PDF se genera con Chrome/Edge, Playwright o WeasyPrint. Si no hay ninguno dis
 - CVEs en caché.
 - Entradas de CISA KEV.
 - Scores EPSS.
-- Estado de los feeds.
+- Estado, última y próxima sincronización de los feeds (con aviso si están desactualizados).
 - Buscador de CVE.
 
-`Sincronizar KEV + EPSS` actualiza la caché. Para entornos sin Internet:
+`Sincronizar KEV + EPSS` actualiza la caché con ETag/Last-Modified, de modo que
+un feed sin cambios no se descarga de nuevo. Para entornos sin Internet:
 
 ```bash
-marlonthebug intel export --output bundle.json
-marlonthebug intel import bundle.json
+# Equipo conectado
+marlonthebug intel keygen --private signing.pem --public signing.pub
+marlonthebug intel export --output bundle.json --sign-key signing.pem
+
+# Equipo air-gapped
+marlonthebug intel verify bundle.json --public-key signing.pub
+marlonthebug intel import bundle.json --signature bundle.json.sig --public-key signing.pub
 ```
+
+En el panel puedes configurar la ruta de la clave pública y marcar **Exigir
+firma Ed25519 al importar bundles**.
 
 ## 7. Activos e inteligencia
 
-En **Activos** puedes ver tecnologías, puertos y hallazgos por host. El botón **Buscar CVEs** correlaciona las tecnologías detectadas con la caché local.
+En **Activos** puedes ver tecnologías, puertos y hallazgos por host. El botón
+**Buscar CVEs** correlaciona producto y versión mediante CPE 2.3 contra NVD y
+muestra CVSS, KEV, EPSS y confianza. Si la versión no tiene CVEs, no se generan
+coincidencias; si no hay versión mapeable, se usa la caché local con confianza
+baja.
 
 ## 8. Explotación controlada
 
@@ -95,17 +108,25 @@ Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de 
 
 En el formulario de análisis, **Seleccionar todos** marca todos los módulos; **Limpiar** los desmarca.
 
-## 9. Herramientas reales en Docker
+## 9. Herramientas reales
+
+El motor admite backend `remote` (tools-runner en Docker Compose), `docker`
+(contenedor efímero desde el panel nativo) y `local` (binarios en `PATH`).
 
 ```bash
-marlonthebug tools build     # construir imagen Kali + herramientas
-marlonthebug tools status    # comprobar Docker/imagen
+marlonthebug tools status    # comprobar backend, Docker o runner
+marlonthebug tools build     # solo backend docker: construir imagen Kali
 marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
 ```
 
-En el panel, abre un hallazgo con explotación activada y usa **Herramientas reales → Ejecutar en Docker**. Herramientas incluidas: sqlmap, nuclei, commix, whatweb, nikto y nmap.
+En el panel, abre un hallazgo con explotación activada y usa **Herramientas
+reales → Ejecutar herramienta**. Herramientas incluidas: sqlmap, nuclei,
+commix, whatweb, nikto y nmap.
 
-El contenedor es efímero, sin capacidades extra y con un volumen temporal. Si Docker no está arrancado, el panel lo avisa y no ejecuta nada.
+El contenedor es efímero, sin capacidades extra y con un volumen temporal. En el
+stack Compose el panel delega en `tools-runner` por la red interna y no monta el
+socket de Docker. Si el motor no está disponible, el panel lo avisa y no ejecuta
+nada.
 
 ## 10. CLI
 
@@ -120,13 +141,18 @@ marlonthebug legacy import --reports reports
 
 ## 11. Datos y backup
 
-Todo vive en el directorio de datos. Para hacer backup:
+Todo vive en el directorio de datos. Usa el backup consistente:
 
 ```bash
-# Linux/macOS
-cp -R ~/.local/share/marlonthebug ~/backup-marlonthebug
-# macOS
-cp -R ~/Library/Application\ Support/MarlonTheBug ~/backup-marlonthebug
+marlonthebug backup --output ~/backups/marlonthebug.tar.gz
+marlonthebug restore ~/backups/marlonthebug.tar.gz --data-dir ~/.local/share/marlonthebug --force
+```
+
+Con Docker Compose:
+
+```bash
+./scripts/backup.sh
+./scripts/restore.sh ./mtb-data/backups/marlonthebug-backup-....tar.gz --force
 ```
 
 En modo portable:
@@ -136,7 +162,8 @@ marlonthebug panel --portable
 # datos en ./data
 ```
 
-Nunca copies `panel.token` a un repositorio ni lo compartas.
+Nunca copies `panel.token` a un repositorio ni lo compartas. Los backups
+incluyen ese token: guárdalos cifrados y fuera del equipo si es posible.
 
 ## 12. Solución de problemas
 

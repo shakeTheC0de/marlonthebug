@@ -22,6 +22,11 @@ MarlonTheBug es una aplicación local-first con tres planos:
 ├─────────────────────────────────────────────────────────────┤
 │ IntelService (KEV · EPSS · NVD · OSV · bundles offline)     │
 ├─────────────────────────────────────────────────────────────┤
+│ ToolService                                                 │
+│  ├─ backend remote  → tools-runner (HTTP interno)           │
+│  ├─ backend docker  → contenedor efímero                    │
+│  └─ backend local   → binarios en PATH                      │
+├─────────────────────────────────────────────────────────────┤
 │ SQLite + SQLAlchemy + Alembic                               │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -83,8 +88,16 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
 - **KEV**: descarga del catálogo CISA y actualización de `cves`.
 - **EPSS**: descarga del CSV diario y actualización de scores.
 - **NVD**: consulta bajo demanda para detalle técnico.
+- **CPE 2.3**: las tecnologías con versión detectadas por `tech_fingerprint` se
+  mapean a `cpe:2.3:a:vendor:product:version` y se consultan con
+  `virtualMatchString`. Las coincidencias se guardan en `asset_intel` con
+  confianza alta; si no hay versión mapeable o NVD no responde, se usa el índice
+  local por palabra clave con confianza baja.
 - **OSV**: consulta por ecosistema/paquete/versión desde supply chain.
-- **Offline**: exportación/importación de bundles JSON.
+- **Frescura**: ETag/Last-Modified por feed, última y próxima sincronización,
+  error y marca de desactualizado.
+- **Offline**: exportación/importación de bundles JSON con firma Ed25519
+  separada (`.sig`), verificación con clave pública y opción de exigir firma.
 
 ## Explotación controlada
 
@@ -98,15 +111,27 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
 
 Cada ejecución se registra en `exploit_runs` y en el audit log. `exploit/trace.py` captura cada petición y respuesta en un contextvar, y `services/evidence.py` genera la justificación, los comandos de reproducción y el hash SHA-256. La evidencia se muestra en el panel, se exporta en Markdown/JSON y se incorpora a los informes. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
 
-## Herramientas Docker
+## Herramientas reales
 
-`ToolService` ejecuta herramientas reales en un contenedor efímero construido desde `Dockerfile.tools`:
+`ToolService` valida `allow_exploitation`, confirmación tipada, scope y mapeo
+plugin→herramienta. Después delega en uno de tres backends:
 
-- Valida `allow_exploitation`, confirmación tipada y scope.
-- Reescribe `localhost` a `host.docker.internal` cuando es necesario.
-- Ejecuta con `--rm`, `--cap-drop ALL`, `--security-opt no-new-privileges`, CPU/memoria limitadas y `/work` temporal.
-- Guarda comando, salida, duración y clasificación en `exploit_runs`.
-- Si Docker o la imagen no están listos, devuelve un error claro y no ejecuta nada.
+| Backend | Ejecución | Aislamiento |
+|---|---|---|
+| `remote` | `POST http://tools-runner:8080/run` | Contenedor Kali sin privilegios, red interna, token |
+| `docker` | `docker run --rm ...` | Contenedor efímero con `--cap-drop ALL`, `no-new-privileges`, CPU/memoria y `/work` |
+| `local` | Subproceso en el host | Sin aislamiento; solo desarrollo/laboratorio |
+
+El `tools-runner` (`tools/runner_api.py`) es un servicio FastAPI independiente
+del panel. Solo expone `GET /healthz` y `POST /run`, autentica con
+`MTB_TOOLS_TOKEN`, aplica una allowlist de herramientas y flags, valida el
+objetivo y ejecuta sin shell. Devuelve salida, código de retorno, duración y
+estado de truncado; la clasificación de evidencia se hace en el panel
+(`tools/base.py`) para que los tres backends apliquen las mismas reglas.
+
+El stack `docker compose` levanta panel + tools-runner. El panel no tiene Docker
+CLI ni monta `/var/run/docker.sock`; el runner no publica puertos y corre con
+rootfs de solo lectura excepto `/work` y `/tmp` (tmpfs).
 
 Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hydra.
 
@@ -114,6 +139,8 @@ Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hyd
 
 - `AppPaths` resuelve datos, configuración, informes, logs, caché y token.
 - `--portable` guarda todo en `./data`.
+- Docker Compose guarda todo en `./mtb-data` (`/data` dentro del panel) y no
+  requiere Python/uv en el host.
 - SQLite usa journal `DELETE` en modo portable para evitar problemas en USB/red.
 - El cliente HTTP, los feeds y el panel no dependen de servicios externos.
 - Los binarios se generan con PyInstaller en CI para macOS, Linux y Windows.

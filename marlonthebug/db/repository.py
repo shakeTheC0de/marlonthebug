@@ -890,6 +890,14 @@ class Repository:
             )
             return list(result.scalars().all())
 
+    async def get_cves_by_ids(self, cve_ids: list[str]) -> dict[str, CveModel]:
+        if not cve_ids:
+            return {}
+        unique = sorted(set(cve_ids))
+        async with self.db.session() as session:
+            result = await session.execute(select(CveModel).where(CveModel.cve_id.in_(unique)))
+            return {cve.cve_id: cve for cve in result.scalars().all()}
+
 
 def _severity_rank(severity: str) -> int:
     return {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}.get(severity, 5)

@@ -24,17 +24,18 @@
     </div>
     <div class="table-wrap">
       <table class="table compact">
-        <thead><tr><th>Feed</th><th>Estado</th><th>Registros</th><th>Última sync</th></tr></thead>
+        <thead><tr><th>Feed</th><th>Estado</th><th>Registros</th><th>Última sync</th><th>Próxima sync</th></tr></thead>
         <tbody>
         {% for feed in summary.feeds %}
         <tr>
           <td class="mono">{{ feed.name }}</td>
-          <td><span class="badge feed-{{ feed.status }}">{{ feed.status }}</span></td>
+          <td><span class="badge feed-{{ feed.status }}">{{ feed.status }}</span>{% if feed.stale %}<span class="tag tag-kev">desactualizado</span>{% endif %}</td>
           <td>{{ feed.count }}</td>
           <td class="muted small">{{ feed.last_sync|relative_time if feed.last_sync else 'nunca' }}</td>
+          <td class="muted small">{% if feed.next_sync %}{{ feed.next_sync|datetimefmt }}{% else %}—{% endif %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="4" class="muted">Sin feeds sincronizados todavía.</td></tr>
+        <tr><td colspan="5" class="muted">Sin feeds sincronizados todavía.</td></tr>
         {% endfor %}
         </tbody>
       </table>
@@ -54,9 +55,10 @@
     <form method="post" action="/intel/import" enctype="multipart/form-data" class="inline-add">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="file" name="file" accept="application/json" required>
+      <input type="file" name="signature" accept=".sig,text/plain" title="Firma Ed25519 opcional">
       <button class="btn btn-ghost btn-sm" type="submit">{{ icon('file', 15) }} Importar bundle</button>
     </form>
-    <p class="hint">Para entornos air-gapped: exporta el bundle desde un equipo conectado e impórtalo aquí. El panel funciona sin feeds, pero prioriza peor.</p>
+    <p class="hint">Para entornos air-gapped: exporta el bundle desde un equipo conectado e impórtalo aquí. Si configuras una clave pública y marcas la firma obligatoria, se verificará la firma Ed25519 antes de importar.</p>
   </section>
 
   <section class="card">
@@ -107,7 +109,7 @@
   {% if kev %}
   <div class="table-wrap">
     <table class="table compact">
-      <thead><tr><th>CVE</th><th>Producto</th><th>CVSS</th><th>EPSS</th><th>Fecha KEV</th><th>Descripción</th></tr></thead>
+      <thead><tr><th>CVE</th><th>Producto</th><th>CVSS</th><th>EPSS</th><th>Fecha KEV</th><th>Ransomware</th><th>Descripción</th></tr></thead>
       <tbody>
       {% for cve in kev %}
       <tr>
@@ -116,6 +118,7 @@
         <td class="mono">{{ '%.1f'|format(cve.cvss_score) if cve.cvss_score else '—' }}</td>
         <td class="mono">{{ '%.1f%%'|format(cve.epss * 100) if cve.epss else '—' }}</td>
         <td class="muted small">{{ cve.kev_due_date or '—' }}</td>
+        <td class="small">{% for item in cve.affected[:1] %}{% if item.get('ransomware', 'Unknown')|lower == 'known' %}<span class="tag tag-kev">conocido</span>{% else %}{{ item.get('ransomware', 'Unknown') }}{% endif %}{% endfor %}</td>
         <td class="muted small">{{ cve.title|truncate(90) }}</td>
       </tr>
       {% endfor %}

@@ -236,7 +236,7 @@ code { font-size: 0.88em; background: rgba(34, 211, 238, 0.08); border: 1px soli
 .confidence-low { color: #94a3b8; }
 .feed-ok { color: #6ee7b7; }
 .feed-error { color: #fda4af; }
-.feed-skipped, .feed-never { color: #94a3b8; }
+.feed-skipped, .feed-never, .feed-not_modified { color: #94a3b8; }
 .exploit-success { background: rgba(52, 211, 153, 0.12); color: #a7f3d0; border-color: rgba(52, 211, 153, 0.3); }
 .exploit-failed { background: rgba(251, 113, 133, 0.12); color: #fda4af; border-color: rgba(251, 113, 133, 0.3); }
 .exploit-running { background: rgba(34, 211, 238, 0.12); color: #a5f3fc; border-color: rgba(34, 211, 238, 0.3); }

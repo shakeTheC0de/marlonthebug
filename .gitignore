@@ -16,6 +16,8 @@ htmlcov/
 
 # ── Runtime data (never commit) ──────────────────────────
 data/
+mtb-data/
+backups/
 workspaces/
 reports/
 logs/
@@ -27,6 +29,7 @@ local/
 *.sqlite3
 *.log
 *.token
+marlonthebug-backup-*.tar.gz
 
 # ── Local sensitive test material ────────────────────────
 /exploit_run.py

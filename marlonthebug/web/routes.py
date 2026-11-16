@@ -758,6 +758,21 @@ async def asset_detail(request: Request, target_id: str):
         raise HTTPException(404, "Activo no encontrado")
     findings = await repo.list_findings_for_target(target.id)
     intel = await repo.list_asset_intel(target.id)
+    cves = await repo.get_cves_by_ids([row.cve_id for row in intel])
+    intel_rows = [
+        {
+            "cve_id": row.cve_id,
+            "product": row.product,
+            "version": row.version,
+            "confidence": row.confidence,
+            "match_type": row.match_type,
+            "cvss_score": cves[row.cve_id].cvss_score if row.cve_id in cves else 0.0,
+            "severity": cves[row.cve_id].severity if row.cve_id in cves else "unknown",
+            "kev": cves[row.cve_id].kev if row.cve_id in cves else False,
+            "epss": cves[row.cve_id].epss if row.cve_id in cves else 0.0,
+        }
+        for row in intel
+    ]
     return await render(
         request,
         "asset_detail.html",
@@ -765,7 +780,7 @@ async def asset_detail(request: Request, target_id: str):
         workspace_id=target.workspace_id,
         target=target,
         findings=findings,
-        intel=intel,
+        intel=intel_rows,
     )
 
 
@@ -778,8 +793,12 @@ async def match_asset_intel(request: Request, target_id: str):
     if not target:
         raise HTTPException(404, "Activo no encontrado")
     rows = await get_intel(request).match_target(target)
-    await repo.log_action("intel.match", target=target.host, detail={"matches": len(rows)})
-    return redirect_with(f"/assets/{target_id}", ok=f"{len(rows)} coincidencias locales de CVE")
+    await repo.log_action(
+        "intel.match",
+        target=target.host,
+        detail={"matches": len(rows), "method": "cpe/nvd"},
+    )
+    return redirect_with(f"/assets/{target_id}", ok=f"{len(rows)} coincidencias CVE (CPE/NVD)")
 
 
 # ── Reports ───────────────────────────────────────────────
@@ -979,14 +998,44 @@ async def export_intel(request: Request):
 
 
 @router.post("/intel/import")
-async def import_intel(request: Request, file: UploadFile = File(...)):
+async def import_intel(
+    request: Request,
+    file: UploadFile = File(...),
+    signature: UploadFile | None = File(None),
+):
+    from marlonthebug.services.signing import SigningError, verify_bundle
+
     form = await request.form()
     require_csrf(request, form)
     content = await file.read()
     if len(content) > 50 * 1024 * 1024:
         return redirect_with("/intel", err="El bundle supera el límite de 50 MB")
-    path = get_paths(request).feeds_dir / "imported-intel.json"
+    paths = get_paths(request)
+    settings = get_settings(request)
+    path = paths.feeds_dir / "imported-intel.json"
     path.write_bytes(content)
+
+    signature_path = None
+    if signature is not None and getattr(signature, "filename", ""):
+        signature_content = await signature.read()
+        if len(signature_content) > 16 * 1024:
+            return redirect_with("/intel", err="La firma supera el límite de 16 KB")
+        signature_path = paths.feeds_dir / "imported-intel.json.sig"
+        signature_path.write_bytes(signature_content)
+
+    if settings.intel.require_bundle_signature or signature_path is not None:
+        key_path = Path(settings.intel.signing_public_key).expanduser() if settings.intel.signing_public_key else None
+        if key_path is None:
+            return redirect_with(
+                "/intel",
+                err="El bundle requiere firma, pero no hay clave pública configurada",
+            )
+        signature_path = signature_path or path.with_name(path.name + ".sig")
+        try:
+            verify_bundle(path, signature_path, key_path)
+        except SigningError as exc:
+            return redirect_with("/intel", err=f"Firma inválida: {exc}")
+
     try:
         count = await get_intel(request).import_bundle(path)
     except Exception as exc:
@@ -1028,6 +1077,10 @@ async def update_settings(request: Request):
     settings.reports.classification = str(form.get("classification", settings.reports.classification))
     settings.intel.auto_sync = bool(form.get("auto_sync"))
     settings.intel.offline = bool(form.get("offline"))
+    settings.intel.require_bundle_signature = bool(form.get("require_bundle_signature"))
+    settings.intel.signing_public_key = str(form.get("signing_public_key", "")).strip()
+    with contextlib.suppress(ValueError):
+        settings.intel.max_cpe_lookups = max(1, min(20, int(form.get("max_cpe_lookups", 5))))
     with contextlib.suppress(ValueError):
         settings.intel.sync_interval_hours = max(1, int(form.get("sync_interval_hours", 24)))
     with contextlib.suppress(ValueError):
@@ -1036,11 +1089,20 @@ async def update_settings(request: Request):
         settings.scan.requests_per_second = max(0.5, float(form.get("requests_per_second", 8)))
         settings.scan.max_requests = max(100, int(form.get("max_requests", 2500)))
     settings.tools.enabled = bool(form.get("tools_enabled"))
+    settings.tools.rewrite_localhost = bool(form.get("tools_rewrite_localhost"))
+    backend = str(form.get("tools_backend", settings.tools.backend)).strip().lower()
+    if backend in {"docker", "remote", "local"}:
+        settings.tools.backend = backend
     settings.tools.docker_image = str(form.get("docker_image", settings.tools.docker_image)).strip()
     settings.tools.network = str(form.get("docker_network", settings.tools.network))
+    settings.tools.remote_url = str(form.get("tools_remote_url", settings.tools.remote_url)).strip()
+    remote_token = str(form.get("tools_remote_token", "")).strip()
+    if remote_token:
+        settings.tools.remote_token = remote_token
     with contextlib.suppress(ValueError):
         settings.tools.timeout = max(30, min(900, int(form.get("tool_timeout", 180))))
     save_settings(settings, get_paths(request))
+    get_tools(request).configure(settings)
     await get_repo(request).log_action("settings.update", detail={"by": "panel"})
     return redirect_with("/settings", ok="Configuración guardada")
 

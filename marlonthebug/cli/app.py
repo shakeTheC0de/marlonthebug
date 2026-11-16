@@ -35,7 +35,7 @@ report_app = typer.Typer(help="Generación de informes", no_args_is_help=True)
 intel_app = typer.Typer(help="Inteligencia de vulnerabilidades", no_args_is_help=True)
 legacy_app = typer.Typer(help="Importación de datos de versiones anteriores", no_args_is_help=True)
 exploit_app = typer.Typer(help="Explotación controlada", no_args_is_help=True)
-tools_app = typer.Typer(help="Herramientas reales en Docker", no_args_is_help=True)
+tools_app = typer.Typer(help="Herramientas reales de seguridad", no_args_is_help=True)
 cli.add_typer(workspace_app, name="workspace")
 cli.add_typer(scan_app, name="scan")
 cli.add_typer(report_app, name="report")
@@ -91,8 +91,8 @@ def main(
 
 @cli.command()
 def panel(
-    host: str = typer.Option("127.0.0.1", "--host", help="Host de escucha"),
-    port: int = typer.Option(8765, "--port", help="Puerto del panel"),
+    host: str | None = typer.Option(None, "--host", help="Host de escucha (por defecto 127.0.0.1)"),
+    port: int | None = typer.Option(None, "--port", help="Puerto del panel (por defecto 8765)"),
     no_browser: bool = typer.Option(False, "--no-browser", help="No abrir el navegador"),
     no_auth: bool = typer.Option(False, "--no-auth", help="Desactivar token local (no recomendado)"),
     data_dir: str | None = typer.Option(None, "--data-dir", help="Directorio de datos"),
@@ -105,9 +105,15 @@ def panel(
     from marlonthebug.web.app import create_app
 
     paths = _paths(data_dir, portable)
-    overrides = {"panel": {"host": host, "port": port}}
-    settings = load_settings(paths, overrides=overrides)
+    overrides: dict[str, dict[str, object]] = {}
+    if host:
+        overrides.setdefault("panel", {})["host"] = host
+    if port:
+        overrides.setdefault("panel", {})["port"] = port
+    settings = load_settings(paths, overrides=overrides or None)
     settings.intel.offline = offline
+    host = host or settings.panel.host
+    port = port or settings.panel.port
     setup_logging(
         level=settings.logging.level,
         log_file=paths.logs_dir / "marlonthebug.log",
@@ -499,13 +505,16 @@ def intel_search(
 @intel_app.command("export")
 def intel_export(
     output: str | None = typer.Option(None, "--output", "-o"),
+    sign_key: str | None = typer.Option(None, "--sign-key", help="Clave privada Ed25519 para firmar el bundle"),
     data_dir: str | None = typer.Option(None, "--data-dir"),
 ) -> None:
     """Exporta un bundle de inteligencia para entornos air-gapped."""
-    asyncio.run(_intel_export(output, data_dir))
+    asyncio.run(_intel_export(output, sign_key, data_dir))
 
 
-async def _intel_export(output: str | None, data_dir: str | None) -> None:
+async def _intel_export(output: str | None, sign_key: str | None, data_dir: str | None) -> None:
+    from marlonthebug.services.signing import SigningError, sign_bundle
+
     paths = _paths(data_dir)
     settings = load_settings(paths)
     database, repository = await _repo(paths)
@@ -513,6 +522,13 @@ async def _intel_export(output: str | None, data_dir: str | None) -> None:
         service = IntelService(repository, settings, paths)
         path = await service.export_bundle(Path(output).expanduser() if output else None)
         console.print(f"[green]Bundle exportado:[/green] {path}")
+        if sign_key:
+            try:
+                signature = sign_bundle(path, Path(sign_key))
+            except SigningError as exc:
+                console.print(f"[red]No se pudo firmar:[/red] {exc}")
+                raise typer.Exit(1) from exc
+            console.print(f"[green]Firma Ed25519:[/green] {signature}")
     finally:
         await database.close()
 
@@ -520,22 +536,87 @@ async def _intel_export(output: str | None, data_dir: str | None) -> None:
 @intel_app.command("import")
 def intel_import(
     path: str = typer.Argument(...),
+    signature: str | None = typer.Option(None, "--signature", help="Firma .sig del bundle"),
+    public_key: str | None = typer.Option(None, "--public-key", help="Clave pública Ed25519"),
     data_dir: str | None = typer.Option(None, "--data-dir"),
 ) -> None:
-    """Importa un bundle de inteligencia."""
-    asyncio.run(_intel_import(path, data_dir))
+    """Importa un bundle de inteligencia (y verifica su firma si se indica)."""
+    asyncio.run(_intel_import(path, signature, public_key, data_dir))
 
 
-async def _intel_import(path: str, data_dir: str | None) -> None:
+async def _intel_import(
+    path: str,
+    signature: str | None,
+    public_key: str | None,
+    data_dir: str | None,
+) -> None:
+    from marlonthebug.services.signing import SigningError, verify_bundle
+
     paths = _paths(data_dir)
     settings = load_settings(paths)
+    bundle_path = Path(path).expanduser()
+    key_path = Path(public_key).expanduser() if public_key else None
+    signature_path = Path(signature).expanduser() if signature else None
+    if settings.intel.require_bundle_signature or signature or key_path:
+        if key_path is None and settings.intel.signing_public_key:
+            key_path = Path(settings.intel.signing_public_key).expanduser()
+        if key_path is None:
+            console.print("[red]Falta la clave pública Ed25519 (--public-key).[/red]")
+            raise typer.Exit(1)
+        if signature_path is None:
+            signature_path = bundle_path.with_name(bundle_path.name + ".sig")
+        try:
+            verify_bundle(bundle_path, signature_path, key_path)
+        except SigningError as exc:
+            console.print(f"[red]Firma inválida:[/red] {exc}")
+            raise typer.Exit(1) from exc
+        console.print(f"[green]Firma válida:[/green] {signature_path}")
+
     database, repository = await _repo(paths)
     try:
         service = IntelService(repository, settings, paths)
-        count = await service.import_bundle(Path(path).expanduser())
+        count = await service.import_bundle(bundle_path)
         console.print(f"[green]{count} CVEs importadas[/green]")
     finally:
         await database.close()
+
+
+@intel_app.command("keygen")
+def intel_keygen(
+    private_key: str = typer.Option("mtb-intel-signing.pem", "--private", help="Ruta de la clave privada"),
+    public_key: str = typer.Option("mtb-intel-signing.pub", "--public", help="Ruta de la clave pública"),
+    force: bool = typer.Option(False, "--force", help="Sobrescribir claves existentes"),
+) -> None:
+    """Genera un par de claves Ed25519 para firmar bundles."""
+    from marlonthebug.services.signing import SigningError, generate_keypair, public_key_fingerprint
+
+    try:
+        private_path, public_path = generate_keypair(Path(private_key), Path(public_key), force=force)
+    except SigningError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Clave privada:[/green] {private_path} [dim](0600)[/dim]")
+    console.print(f"[green]Clave pública:[/green] {public_path}")
+    console.print(f"[dim]Huella SHA-256: {public_key_fingerprint(public_path)}[/dim]")
+
+
+@intel_app.command("verify")
+def intel_verify(
+    path: str = typer.Argument(..., help="Bundle a verificar"),
+    public_key: str = typer.Option(..., "--public-key", help="Clave pública Ed25519"),
+    signature: str | None = typer.Option(None, "--signature", help="Firma .sig (por defecto bundle.sig)"),
+) -> None:
+    """Verifica la firma Ed25519 de un bundle."""
+    from marlonthebug.services.signing import SigningError, verify_bundle
+
+    bundle_path = Path(path).expanduser()
+    signature_path = Path(signature).expanduser() if signature else bundle_path.with_name(bundle_path.name + ".sig")
+    try:
+        verify_bundle(bundle_path, signature_path, Path(public_key).expanduser())
+    except SigningError as exc:
+        console.print(f"[red]Firma inválida:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Firma válida:[/green] {signature_path}")
 
 
 @exploit_app.command("list")
@@ -616,7 +697,7 @@ async def _exploit_run(
 
 @tools_app.command("status")
 def tools_status(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
-    """Muestra el estado de Docker y la imagen de herramientas."""
+    """Muestra el estado del backend de herramientas."""
     asyncio.run(_tools_status(data_dir))
 
 
@@ -639,7 +720,7 @@ def tools_build(
     image: str | None = typer.Option(None, "--image", help="Imagen a construir"),
     data_dir: str | None = typer.Option(None, "--data-dir"),
 ) -> None:
-    """Construye la imagen Docker con Kali y las herramientas."""
+    """Construye la imagen Docker con Kali (solo backend docker)."""
     paths = _paths(data_dir)
     settings = load_settings(paths)
     if image:
@@ -664,7 +745,7 @@ def tools_run(
     confirm_text: str = typer.Option(..., "--confirm-text", help="Escribe EXPLOTAR"),
     data_dir: str | None = typer.Option(None, "--data-dir"),
 ) -> None:
-    """Ejecuta una herramienta real en Docker contra un hallazgo."""
+    """Ejecuta una herramienta real contra un hallazgo."""
     asyncio.run(_tools_run(finding_id, tool, confirm_text, data_dir))
 
 
@@ -686,6 +767,68 @@ async def _tools_run(finding_id: str, tool: str, confirm_text: str, data_dir: st
         console.print(run.output[:8000] or run.error or "Sin salida")
     finally:
         await database.close()
+
+
+@tools_app.command("runner")
+def tools_runner(
+    host: str = typer.Option("0.0.0.0", "--host", help="Host de escucha del runner"),
+    port: int = typer.Option(8080, "--port", help="Puerto del runner"),
+) -> None:
+    """Arranca el servicio tools-runner (uso interno o desarrollo)."""
+    import os
+
+    from marlonthebug.tools.runner_api import serve
+
+    if not os.environ.get("MTB_TOOLS_TOKEN"):
+        console.print("[red]Define MTB_TOOLS_TOKEN antes de arrancar el tools-runner.[/red]")
+        raise typer.Exit(1)
+    console.print(f"[cyan]tools-runner[/cyan] escuchando en http://{host}:{port}")
+    serve(host, port)
+
+
+@cli.command("backup")
+def backup_command(
+    output: str | None = typer.Option(None, "--output", "-o", help="Archivo .tar.gz de destino"),
+    include_logs: bool = typer.Option(False, "--include-logs", help="Incluir logs en el backup"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Empaqueta la base de datos, informes y configuración en un .tar.gz."""
+    from marlonthebug.services.backup import BackupError, create_backup
+
+    paths = _paths(data_dir)
+    try:
+        target = create_backup(
+            paths,
+            Path(output).expanduser() if output else None,
+            include_logs=include_logs,
+        )
+    except BackupError as exc:
+        console.print(f"[red]No se pudo crear el backup:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Backup creado:[/green] {target}")
+    console.print("[dim]Incluye la base de datos, informes, configuración y el token del panel.[/dim]")
+
+
+@cli.command("restore")
+def restore_command(
+    archive: str = typer.Argument(..., help="Archivo .tar.gz creado por marlonthebug backup"),
+    force: bool = typer.Option(False, "--force", help="Sobrescribir los datos existentes"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="No pedir confirmación"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Restaura un backup en el directorio de datos."""
+    from marlonthebug.services.backup import BackupError, restore_backup
+
+    paths = AppPaths.resolve(data_dir=data_dir)
+    if not yes and not typer.confirm(f"¿Restaurar {archive} en {paths.root}?"):
+        raise typer.Exit()
+    try:
+        stats = restore_backup(Path(archive), paths, force=force)
+    except BackupError as exc:
+        console.print(f"[red]No se pudo restaurar:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    console.print(f"[green]Restauración completada:[/green] {stats['files']} archivos en {paths.root}")
+    console.print("[dim]Arranca el panel de nuevo para aplicar los datos restaurados.[/dim]")
 
 
 @cli.command("console")

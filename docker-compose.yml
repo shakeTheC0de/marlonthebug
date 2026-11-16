@@ -1,0 +1,89 @@
+name: marlonthebug
+
+services:
+  panel:
+    image: ${MTB_PANEL_IMAGE:-ghcr.io/shakethec0de/marlonthebug:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mtb-panel
+    restart: unless-stopped
+    stop_grace_period: 20s
+    user: "${MTB_UID:-10001}:${MTB_GID:-10001}"
+    ports:
+      - "127.0.0.1:${MTB_PANEL_PORT:-8765}:${MTB_PANEL_PORT:-8765}"
+    environment:
+      MTB_DATA_DIR: /data
+      MTB_PANEL_PORT: ${MTB_PANEL_PORT:-8765}
+      MTB_TOOLS_BACKEND: ${MTB_TOOLS_BACKEND:-remote}
+      MTB_TOOLS_URL: ${MTB_TOOLS_URL:-http://tools-runner:8080}
+      MTB_TOOLS_TOKEN: ${MTB_TOOLS_TOKEN:?Define MTB_TOOLS_TOKEN en .env (scripts/install.sh lo genera)}
+      MTB_TOOLS_TIMEOUT: ${MTB_TOOLS_TIMEOUT:-180}
+      MTB_INTEL_OFFLINE: ${MTB_INTEL_OFFLINE:-0}
+      NVD_API_KEY: ${NVD_API_KEY:-}
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp
+    volumes:
+      - ${MTB_DATA_DIR:-./mtb-data}:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os,sys,urllib.request; port=os.environ.get('MTB_PANEL_PORT','8765'); sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+port+'/healthz', timeout=5).status == 200 else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    networks:
+      - mtb
+
+  tools-runner:
+    image: ${MTB_TOOLS_IMAGE:-ghcr.io/shakethec0de/marlonthebug-tools:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    container_name: mtb-tools-runner
+    restart: unless-stopped
+    user: "${MTB_UID:-10001}:${MTB_GID:-10001}"
+    environment:
+      MTB_TOOLS_TOKEN: ${MTB_TOOLS_TOKEN:?Define MTB_TOOLS_TOKEN en .env (scripts/install.sh lo genera)}
+      MTB_TOOLS_TIMEOUT: ${MTB_TOOLS_TIMEOUT:-180}
+      MTB_TOOLS_CONCURRENCY: ${MTB_TOOLS_CONCURRENCY:-2}
+      MTB_TOOLS_MAX_OUTPUT: ${MTB_TOOLS_MAX_OUTPUT:-60000}
+      HOME: /work
+    expose:
+      - "8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /work:size=512m,mode=1777
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+    networks:
+      - mtb
+
+networks:
+  mtb:
+    driver: bridge

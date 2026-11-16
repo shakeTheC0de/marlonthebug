@@ -6,7 +6,7 @@ import contextlib
 import copy
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -94,7 +94,11 @@ class IntelSettings(BaseModel):
     sync_interval_hours: int = 24
     offline: bool = False
     request_timeout: float = 30.0
+    cpe_timeout: float = 12.0
     nvd_api_key: str = ""
+    max_cpe_lookups: int = 5
+    signing_public_key: str = ""
+    require_bundle_signature: bool = False
     kev_url: str = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     epss_url: str = "https://api.first.org/data/v1/epss"
     osv_url: str = "https://api.osv.dev/v1"
@@ -113,11 +117,15 @@ class ReportSettings(BaseModel):
 
 class ToolSettings(BaseModel):
     enabled: bool = True
+    backend: Literal["docker", "remote", "local"] = "docker"
     docker_image: str = "marlonthebug/kali-tools:latest"
+    remote_url: str = "http://tools-runner:8080"
+    remote_token: str = ""
     timeout: int = 180
     network: str = "bridge"
     max_output_chars: int = 60000
     auto_pull: bool = False
+    rewrite_localhost: bool = True
 
 
 class LoggingSettings(BaseModel):
@@ -165,17 +173,56 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return result
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").lower() in {"1", "true", "yes", "on"}
+
+
 def _env_overrides() -> dict[str, Any]:
     overrides: dict[str, Any] = {}
-    if value := os.environ.get("MARLONTHEBUG_HOST"):
+    if value := os.environ.get("MARLONTHEBUG_HOST") or os.environ.get("MTB_PANEL_HOST"):
         overrides.setdefault("panel", {})["host"] = value
-    if value := os.environ.get("MARLONTHEBUG_PORT"):
+    if value := os.environ.get("MARLONTHEBUG_PORT") or os.environ.get("MTB_PANEL_PORT"):
         with contextlib.suppress(ValueError):
             overrides.setdefault("panel", {})["port"] = int(value)
-    if os.environ.get("MARLONTHEBUG_OFFLINE", "").lower() in {"1", "true", "yes"}:
+    if os.environ.get("MARLONTHEBUG_OFFLINE", "").lower() in {"1", "true", "yes", "on"}:
+        overrides.setdefault("intel", {})["offline"] = True
+    if _env_flag("MTB_INTEL_OFFLINE"):
         overrides.setdefault("intel", {})["offline"] = True
     if value := os.environ.get("NVD_API_KEY"):
         overrides.setdefault("intel", {})["nvd_api_key"] = value
+    if value := os.environ.get("MTB_MAX_CPE_LOOKUPS"):
+        with contextlib.suppress(ValueError):
+            overrides.setdefault("intel", {})["max_cpe_lookups"] = max(1, min(20, int(value)))
+    if value := os.environ.get("MTB_CPE_TIMEOUT"):
+        with contextlib.suppress(ValueError):
+            overrides.setdefault("intel", {})["cpe_timeout"] = max(3.0, min(60.0, float(value)))
+    if value := os.environ.get("MTB_BUNDLE_PUBLIC_KEY"):
+        overrides.setdefault("intel", {})["signing_public_key"] = value
+    if _env_flag("MTB_REQUIRE_BUNDLE_SIGNATURE"):
+        overrides.setdefault("intel", {})["require_bundle_signature"] = True
+
+    tools: dict[str, Any] = {}
+    if value := os.environ.get("MTB_TOOLS_BACKEND"):
+        normalized = value.strip().lower()
+        if normalized in {"docker", "remote", "local"}:
+            tools["backend"] = normalized
+    if value := os.environ.get("MTB_TOOLS_URL"):
+        tools["remote_url"] = value
+    if value := os.environ.get("MTB_TOOLS_TOKEN"):
+        tools["remote_token"] = value
+    if value := os.environ.get("MTB_TOOLS_IMAGE"):
+        tools["docker_image"] = value
+    if value := os.environ.get("MTB_TOOLS_TIMEOUT"):
+        with contextlib.suppress(ValueError):
+            tools["timeout"] = max(30, min(900, int(value)))
+    if _env_flag("MTB_TOOLS_DISABLED"):
+        tools["enabled"] = False
+    if "MTB_TOOLS_ENABLED" in os.environ:
+        tools["enabled"] = _env_flag("MTB_TOOLS_ENABLED")
+    if "MTB_TOOLS_REWRITE_LOCALHOST" in os.environ:
+        tools["rewrite_localhost"] = _env_flag("MTB_TOOLS_REWRITE_LOCALHOST")
+    if tools:
+        overrides["tools"] = tools
     return overrides
 
 

@@ -4,34 +4,32 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import shutil
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 from marlonthebug.settings import ToolSettings
+from marlonthebug.tools.base import (
+    ToolResult,
+    classify_output,
+    clean_output,
+    extract_output_highlights,
+    truncate_output,
+)
 
 logger = logging.getLogger("marlonthebug.tools.docker")
 
-ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-
-
-@dataclass
-class ToolResult:
-    tool: str
-    success: bool
-    output: str
-    evidence: dict
-    error: str = ""
-    duration: float = 0.0
-    command: list[str] = field(default_factory=list)
+__all__ = ["DockerToolRunner", "ToolResult", "docker_build_command", "docker_url"]
 
 
 class DockerToolRunner:
+    """Run each tool in an ephemeral, capability-restricted container."""
+
+    backend = "docker"
+
     def __init__(self, settings: ToolSettings) -> None:
         self.settings = settings
 
@@ -40,8 +38,10 @@ class DockerToolRunner:
         if not docker:
             return {
                 "available": False,
+                "backend": self.backend,
                 "reason": "docker no está instalado en PATH",
                 "image": self.settings.docker_image,
+                "image_ready": False,
             }
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -63,18 +63,27 @@ class DockerToolRunner:
             ):
                 return {
                     "available": False,
+                    "backend": self.backend,
                     "reason": output[:300] or "Docker daemon no disponible",
                     "image": self.settings.docker_image,
+                    "image_ready": False,
                 }
             image = await self._image_exists(docker)
             return {
                 "available": True,
+                "backend": self.backend,
                 "version": stdout.decode("utf-8", errors="replace").strip(),
                 "image": self.settings.docker_image,
                 "image_ready": image,
             }
         except Exception as exc:
-            return {"available": False, "reason": str(exc), "image": self.settings.docker_image}
+            return {
+                "available": False,
+                "backend": self.backend,
+                "reason": str(exc),
+                "image": self.settings.docker_image,
+                "image_ready": False,
+            }
 
     async def _image_exists(self, docker: str) -> bool:
         proc = await asyncio.create_subprocess_exec(
@@ -101,7 +110,7 @@ class DockerToolRunner:
                 tool,
                 False,
                 "",
-                {"image": self.settings.docker_image},
+                {"image": self.settings.docker_image, "backend": self.backend},
                 error=(f"La imagen {self.settings.docker_image} no existe. Constrúyela con: marlonthebug tools build"),
             )
 
@@ -145,19 +154,23 @@ class DockerToolRunner:
                     tool,
                     False,
                     "",
-                    {"command": command, "target": target_url, "timeout": self.settings.timeout},
+                    {
+                        "command": command,
+                        "target": target_url,
+                        "timeout": self.settings.timeout,
+                        "backend": self.backend,
+                    },
                     error=f"Tiempo máximo de {self.settings.timeout}s excedido",
                     duration=time.monotonic() - started,
                     command=command,
                 )
             duration = time.monotonic() - started
-            stdout_text = _clean(stdout.decode("utf-8", errors="replace"))
-            stderr_text = _clean(stderr.decode("utf-8", errors="replace"))
+            stdout_text = clean_output(stdout.decode("utf-8", errors="replace"))
+            stderr_text = clean_output(stderr.decode("utf-8", errors="replace"))
             output = (stdout_text + ("\n" + stderr_text if stderr_text else "")).strip()
-            if len(output) > self.settings.max_output_chars:
-                output = output[: self.settings.max_output_chars] + "\n… [salida truncada]"
-            success, reason = self._classify(tool, output)
-            highlights = _extract_highlights(output)
+            output = truncate_output(output, self.settings.max_output_chars)
+            success, reason = classify_output(tool, output)
+            highlights = extract_output_highlights(output)
             return ToolResult(
                 tool=tool,
                 success=success,
@@ -165,12 +178,14 @@ class DockerToolRunner:
                 evidence={
                     "tool": tool,
                     "target": target_url,
+                    "backend": self.backend,
+                    "image": self.settings.docker_image,
                     "command": command,
                     "returncode": proc.returncode,
                     "duration": round(duration, 2),
                     "classification": reason,
                     "highlights": highlights,
-                    "output_file": f"{workdir}",
+                    "output_file": workdir,
                 },
                 error="" if success else reason,
                 duration=duration,
@@ -181,7 +196,7 @@ class DockerToolRunner:
                 tool,
                 False,
                 "",
-                {"command": command, "target": target_url},
+                {"command": command, "target": target_url, "backend": self.backend},
                 error=str(exc),
                 duration=time.monotonic() - started,
                 command=command,
@@ -191,77 +206,8 @@ class DockerToolRunner:
 
     @staticmethod
     def _classify(tool: str, output: str) -> tuple[bool, str]:
-        lowered = output.lower()
-        if tool == "sqlmap":
-            if (
-                "is vulnerable" in lowered
-                or "available databases" in lowered
-                or re.search(r"parameter:\s+\S+\s+\(", lowered)
-                or "back-end dbms" in lowered
-            ):
-                return True, "sqlmap identificó el parámetro como inyectable"
-            if "not injectable" in lowered or "does not seem to be injectable" in lowered:
-                return False, "sqlmap no confirmó inyección"
-        elif tool == "nuclei":
-            if any(marker in lowered for marker in ('"template-id"', "[critical]", "[high]", "[medium]")):
-                return True, "nuclei devolvió al menos una coincidencia"
-            return False, "nuclei no devolvió coincidencias"
-        elif tool == "commix":
-            if "not reachable" in lowered or "does not seem" in lowered or "not injectable" in lowered:
-                return False, "commix no pudo alcanzar o confirmar el objetivo"
-            if (
-                re.search(r"(parameter|injection point).{0,120}(vulnerable|injectable)", lowered)
-                or "uid=" in lowered
-                or "root:x:0:0" in lowered
-                or "command execution" in lowered
-            ):
-                return True, "commix identificó y verificó command injection"
-            return False, "commix no devolvió una confirmación de inyección"
-        if tool in {"whatweb", "nikto", "nmap"}:
-            return True, "herramienta ejecutada; revisa la salida"
-        return False, "sin marcador de confirmación"
-
-
-def _clean(value: str) -> str:
-    return ANSI_RE.sub("", value).strip()
-
-
-def _extract_highlights(output: str, limit: int = 25) -> list[str]:
-    markers = (
-        "vulnerable",
-        "injectable",
-        "payload",
-        "uid=",
-        "gid=",
-        "available databases",
-        "database:",
-        "back-end dbms",
-        "[critical]",
-        "[high]",
-        "[medium]",
-        "template-id",
-        "root:x:0:0",
-        "command execution",
-        "[+]",
-        "[success]",
-        "[200 ok]",
-        "title[",
-        "ip[",
-        "server[",
-        "country[",
-        "x-powered-by",
-        "open",
-    )
-    highlights: list[str] = []
-    for line in output.splitlines():
-        clean = line.strip()
-        if not clean or len(clean) < 8:
-            continue
-        if any(marker in clean.lower() for marker in markers) and clean not in highlights:
-            highlights.append(clean[:500])
-        if len(highlights) >= limit:
-            break
-    return highlights
+        """Backward-compatible wrapper used by older integrations."""
+        return classify_output(tool, output)
 
 
 def docker_url(url: str) -> str:

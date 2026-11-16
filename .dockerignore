@@ -10,13 +10,17 @@ __pycache__
 .coverage
 htmlcov
 data
+mtb-data
 reports
 workspaces
 logs
+backups
 private
 local
 dist
 build
 *.db
 *.sqlite3
+*.tar.gz
+.env
 .DS_Store

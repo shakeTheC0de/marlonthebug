@@ -19,6 +19,7 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 - **Informes** ejecutivos y técnicos en PDF, HTML, Markdown y JSON, en español e inglés.
 - **Explotación controlada** con evidencia: SQLi de solo lectura, XSS canario, LFI, RCE de prueba (`id`/`whoami`), SSTI, SSRF y open redirect. Sin shells inversas ni persistencia por defecto.
 - **Inteligencia de vulnerabilidades**: CISA KEV, EPSS, NVD y OSV con caché local y bundles para entornos air-gapped.
+- **Stack Docker portable**: panel + tools-runner Kali aislado, sin socket de Docker, con backup y restauración.
 - **Modo portable**: todos los datos en `./data`, ideal para USB.
 - **Sin CDN, sin telemetría y sin dependencias de servicios cloud**.
 
@@ -67,14 +68,23 @@ En Windows:
 .\marlonthebug.exe panel --portable --no-browser
 ```
 
-### Docker
+### Docker Compose (recomendado para desplegar)
 
 ```bash
-docker build -t marlonthebug .
-docker run --rm -p 8765:8765 -v "$PWD/mtb-data:/data" marlonthebug
+git clone https://github.com/shakeTheC0de/marlonthebug
+cd marlonthebug
+./scripts/install.sh
 ```
 
-El token de acceso aparece en los logs del contenedor.
+El stack levanta el **panel** y un **tools-runner** Kali aislado, sin Docker CLI
+ni socket dentro del panel. Los datos quedan en `./mtb-data` y el panel escucha
+solo en `127.0.0.1:8765`. Guía completa: [`docs/DOCKER.md`](docs/DOCKER.md).
+
+```bash
+docker compose up -d          # arranque manual
+docker compose logs -f panel  # token y URL
+./scripts/backup.sh           # backup consistente
+```
 
 ---
 
@@ -118,6 +128,10 @@ marlonthebug intel export --output intel-bundle.json
 marlonthebug legacy import --reports reports
 marlonthebug exploit list --workspace acme-audit
 marlonthebug exploit run --finding <id> --module webapp/xss_exploit --confirm-text EXPLOTAR
+marlonthebug tools status
+marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
+marlonthebug backup --output ~/backups/acme-audit.tar.gz
+marlonthebug restore ~/backups/acme-audit.tar.gz --data-dir ./mtb-data --force
 ```
 
 ### Perfiles de análisis
@@ -161,6 +175,18 @@ MARLONTHEBUG_OFFLINE=1
 NVD_API_KEY=...
 ```
 
+En Docker Compose se usan las variables `MTB_*` documentadas en
+[`docs/DOCKER.md`](docs/DOCKER.md) y en `.env.example`:
+
+```bash
+MTB_DATA_DIR=./mtb-data
+MTB_PANEL_PORT=8765
+MTB_TOOLS_BACKEND=remote
+MTB_TOOLS_URL=http://tools-runner:8080
+MTB_TOOLS_TOKEN=...
+MTB_TOOLS_TIMEOUT=180
+```
+
 ---
 
 ## Explotación controlada
@@ -183,32 +209,48 @@ Solo debes usar estos módulos contra sistemas propios o con autorización escri
 
 ---
 
-## Herramientas reales en Docker
+## Herramientas reales
 
-El panel puede ejecutar herramientas reales dentro de un contenedor Kali aislado. La imagen incluye `sqlmap`, `nuclei`, `commix`, `whatweb`, `nikto`, `nmap`, `ffuf`, `gobuster` y `hydra`.
+El motor de herramientas admite tres backends:
+
+| Backend | Descripción | Uso |
+|---|---|---|
+| `remote` | Panel → `tools-runner` por HTTP interno | Docker Compose (recomendado) |
+| `docker` | Contenedor efímero desde el panel nativo | Docker Desktop/Engine en el host |
+| `local` | Herramientas instaladas en `PATH` | Desarrollo y laboratorio |
+
+La imagen incluye `sqlmap`, `nuclei`, `commix`, `whatweb`, `nikto`, `nmap`,
+`ffuf`, `gobuster` y `hydra`.
 
 ```bash
-# Construir la imagen (una vez)
-marlonthebug tools build
-
-# Comprobar Docker y la imagen
+# Comprobar el motor configurado
 marlonthebug tools status
 
 # Ejecutar una herramienta contra un hallazgo
 marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
+
+# Arrancar el runner fuera de Compose (desarrollo)
+MTB_TOOLS_TOKEN=... marlonthebug tools runner --host 127.0.0.1 --port 8080
 ```
 
-Desde el panel: abre un hallazgo con explotación activada y usa **Herramientas reales → Ejecutar en Docker**.
+Desde el panel: abre un hallazgo con explotación activada y usa
+**Herramientas reales → Ejecutar herramienta**.
 
 Medidas de seguridad:
 
-- El contenedor usa `--rm`, `--cap-drop ALL`, `--security-opt no-new-privileges`, límites de CPU/memoria y un volumen temporal `/work`.
-- El objetivo se valida contra el scope antes de arrancar Docker.
-- Los targets `localhost`/`127.0.0.1` se reescriben a `host.docker.internal` para Docker Desktop.
-- Cada ejecución crea un `exploit_run` con comando, salida, duración y evidencia.
-- Si Docker no está arrancado, el panel lo indica y no ejecuta nada.
+- El panel no monta el socket de Docker en el stack portable.
+- El `tools-runner` valida token, herramienta, flags, objetivo, timeout y
+  tamaño de argumentos; no usa shell.
+- `cap_drop: ALL`, `no-new-privileges`, rootfs de solo lectura, límites de
+  CPU/memoria/PIDs y `/work` temporal.
+- El objetivo se valida contra el scope antes de ejecutar.
+- Cada ejecución crea un `exploit_run` con comando, salida, duración y
+  evidencia; la clasificación (confirmado/no confirmado) se aplica en el panel.
+- Si el runner o Docker no están disponibles, el panel lo indica y no ejecuta
+  nada.
 
-La imagen también puede publicarse en GHCR con el workflow `Tools image`.
+Las imágenes se publican en GHCR para `linux/amd64` y `linux/arm64` mediante el
+workflow **Container images**.
 
 ---
 
@@ -218,16 +260,22 @@ La imagen también puede publicarse en GHCR con el workflow `Tools image`.
 - **EPSS**: probabilidad de explotación en 30 días.
 - **NVD**: detalle técnico, CVSS y CWE bajo demanda.
 - **OSV**: dependencias npm, PyPI, Maven, Go, etc.
+- **CPE 2.3**: correlación de producto y versión detectados con CVEs de NVD, con confianza alta y sin ruido cuando la versión no tiene CVEs.
+- **Frescura de feeds**: ETag/Last-Modified, última y próxima sincronización, errores y aviso de feed desactualizado.
+- **Bundles firmados Ed25519** para entornos air-gapped, con verificación antes de importar.
 
 La sincronización es automática al arrancar (si hay red) y puede lanzarse desde el panel o con `marlonthebug intel sync`. Para entornos sin Internet:
 
 ```bash
 # En un equipo conectado
-marlonthebug intel export --output intel-bundle.json
+marlonthebug intel export --output intel-bundle.json --sign-key signing.pem
 
 # En el equipo air-gapped
-marlonthebug intel import intel-bundle.json
+marlonthebug intel verify intel-bundle.json --public-key signing.pub
+marlonthebug intel import intel-bundle.json --signature intel-bundle.json.sig --public-key signing.pub
 ```
+
+Genera el par de claves una vez con `marlonthebug intel keygen --private signing.pem --public signing.pub`.
 
 ---
 
@@ -307,12 +355,13 @@ marlonthebug/
 ├── core/           contexto de scan, scope, pipeline, workspaces
 ├── http/           cliente httpx, baseline/soft-404, rate limit
 ├── plugins/        recon, web, api, llm
-├── services/       scanner, informes, inteligencia
+├── services/       scanner, informes, inteligencia, backup
 ├── output/         plantillas de informes PDF/HTML/Markdown
 ├── crawler/        spider async
 ├── fuzzer/         motor de fuzzing y wordlists
 ├── collaborator/   OOB DNS/HTTP
 ├── listeners/      listeners de reverse connections
+├── tools/          catálogo, backends docker/remote/local y runner API
 └── exploit/        módulos de explotación controlada
 ```
 

@@ -39,7 +39,7 @@ class AppPaths:
         data_dir: str | Path | None = None,
         portable: bool = False,
     ) -> AppPaths:
-        env_dir = os.environ.get("MARLONTHEBUG_DATA_DIR")
+        env_dir = os.environ.get("MARLONTHEBUG_DATA_DIR") or os.environ.get("MTB_DATA_DIR")
         if data_dir:
             root = Path(data_dir).expanduser().resolve()
         elif env_dir:

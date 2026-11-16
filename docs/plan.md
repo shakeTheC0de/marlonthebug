@@ -9,11 +9,13 @@
 | 2. Panel web | ✅ | FastAPI + Jinja, dashboard, proyectos, activos, scans, hallazgos, triaje |
 | 3. Informes | ✅ | PDF/HTML/Markdown/JSON, plantillas ES/EN, evidencia, CVSS, CWE, OWASP |
 | 4. Fiabilidad | ✅ | Scope guard fail-closed, baseline/soft-404, HTTP compartido, rate limit, dedupe |
-| 5. Inteligencia | ✅ | CISA KEV, EPSS, NVD, OSV, caché local, bundles offline |
+| 5. Inteligencia | ✅ | CISA KEV, EPSS, NVD, OSV, CPE/versiones, caché local, frescura de feeds y bundles firmados Ed25519 |
 | 6. Módulos modernos | ✅ | JWT, OAuth, BOLA/IDOR, mass assignment, GraphQL, prototype pollution, cache poisoning, supply chain, cloud dashboards, CI/CD, LLM |
 | 7. Portabilidad | ✅ | `--portable`, datos fuera del repo, Docker, PyInstaller en CI, README |
 | 8. Explotación controlada | ✅ | SQLi, XSS, LFI, RCE, SSTI, SSRF, open redirect; confirmación tipada, evidencia y audit log |
 | 9. Herramientas Docker | ✅ | Imagen Kali con sqlmap, nuclei, commix, whatweb, nikto, nmap; ejecución aislada y conectada al panel |
+| 10. Stack portable | ✅ | `docker compose` panel + tools-runner, sin socket, backends remote/docker/local, token y red interna |
+| 11. Operación | ✅ | `marlonthebug backup`/`restore`, scripts de backup/instalación, imágenes GHCR multiarquitectura |
 
 ## Principios
 
@@ -25,7 +27,6 @@
 
 ## Próximos pasos recomendados
 
-- Implementar el stack Docker portable panel + tools-runner descrito en `docs/ROADMAP_NEXT.md`.
 - Mejorar la correlación de inteligencia por CPE y versiones.
 - Añadir autenticación multiusuario opcional para despliegues en servidor.
 - Firmar los bundles de inteligencia con Ed25519.

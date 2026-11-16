@@ -66,7 +66,11 @@ intel:
   sync_interval_hours: 24
   offline: false
   request_timeout: 30
+  cpe_timeout: 12
   nvd_api_key: ""
+  max_cpe_lookups: 5
+  signing_public_key: ""
+  require_bundle_signature: false
   kev_url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
   epss_url: "https://api.first.org/data/v1/epss"
   osv_url: "https://api.osv.dev/v1"
@@ -83,11 +87,15 @@ reports:
 
 tools:
   enabled: true
+  backend: "docker"
   docker_image: "marlonthebug/kali-tools:latest"
+  remote_url: "http://tools-runner:8080"
+  remote_token: ""
   timeout: 180
   network: "bridge"
   max_output_chars: 60000
   auto_pull: false
+  rewrite_localhost: true
 
 logging:
   level: "INFO"

@@ -19,7 +19,8 @@ from marlonthebug.services.evidence import build_justification, extract_highligh
 from marlonthebug.services.exploitation import CONFIRMATION_WORDS, ExploitBlocked
 from marlonthebug.settings import AppSettings
 from marlonthebug.tools.catalog import build_command, tool_by_key, tools_for_plugin
-from marlonthebug.tools.docker_runner import DockerToolRunner, docker_build_command, docker_url
+from marlonthebug.tools.docker_runner import docker_build_command, docker_url
+from marlonthebug.tools.runner_factory import ToolRunner, build_tool_runner
 
 logger = logging.getLogger("marlonthebug.tools")
 
@@ -29,9 +30,20 @@ class ToolService:
         self.repository = repository
         self.settings = settings
         self.paths = paths
-        self.runner = DockerToolRunner(settings.tools)
+        self.runner: ToolRunner = build_tool_runner(settings.tools)
         self._status_cache: dict[str, Any] | None = None
         self._status_at: float = 0.0
+
+    @property
+    def backend(self) -> str:
+        return self.settings.tools.backend
+
+    def configure(self, settings: AppSettings) -> None:
+        """Rebuild the runner after a settings change from the panel."""
+        self.settings = settings
+        self.runner = build_tool_runner(settings.tools)
+        self._status_cache = None
+        self._status_at = 0.0
 
     async def status(self) -> dict[str, Any]:
         import time
@@ -96,25 +108,25 @@ class ToolService:
         if resolved_url != target_url:
             args = [item.replace(target_url, resolved_url) for item in args]
             target_url = resolved_url
-        container_url = docker_url(target_url)
-        if container_url != target_url:
-            args = [
-                item.replace(target_url, container_url)
-                .replace("127.0.0.1", "host.docker.internal")
-                .replace("localhost", "host.docker.internal")
-                for item in args
-            ]
-        target_url = container_url
+        if self.settings.tools.backend in {"docker", "remote"} and self.settings.tools.rewrite_localhost:
+            reachable_url = docker_url(target_url)
+            if reachable_url != target_url:
+                args = [item.replace(target_url, reachable_url) for item in args]
+            target_url = reachable_url
 
-        recorder = TraceRecorder(
-            metadata={
-                "finding_id": finding.id,
-                "tool": tool.key,
-                "image": self.settings.tools.docker_image,
-                "operator": operator,
-                "workspace": workspace.name,
-            }
-        )
+        backend = self.settings.tools.backend
+        runner_meta: dict[str, Any] = {
+            "backend": backend,
+            "operator": operator,
+            "workspace": workspace.name,
+            "finding_id": finding.id,
+            "tool": tool.key,
+        }
+        if backend == "docker":
+            runner_meta["image"] = self.settings.tools.docker_image
+        elif backend == "remote":
+            runner_meta["runner"] = self.settings.tools.remote_url
+        recorder = TraceRecorder(metadata=runner_meta)
         recorder.note(
             "authorization",
             "Herramienta autorizada por el operador y el alcance del proyecto",
@@ -122,18 +134,23 @@ class ToolService:
         )
         recorder.note(
             "preflight",
-            "Resolución de URL y preparación del contenedor",
-            {"requested": requested_url, "resolved": target_url, "docker_image": self.settings.tools.docker_image},
+            "Resolución de URL y preparación del motor de herramientas",
+            {
+                "requested": requested_url,
+                "resolved": target_url,
+                **({"docker_image": self.settings.tools.docker_image} if backend == "docker" else {}),
+                **({"runner": self.settings.tools.remote_url} if backend == "remote" else {}),
+            },
         )
         token = set_trace(recorder)
         run = await self.repository.create_exploit_run(
             workspace_id=workspace.id,
             finding_id=finding.id,
             target_id=finding.target_id,
-            module_name=f"docker/{tool.key}",
-            module_category="docker",
+            module_name=f"{backend}/{tool.key}",
+            module_category=backend,
             risk=tool.risk,
-            payload={"tool": tool.key, "target": target_url, "args": args},
+            payload={"tool": tool.key, "target": target_url, "args": args, "backend": backend},
             operator=operator,
         )
         await self.repository.update_exploit_run(run.id, status="running", started_at=datetime.now(UTC))
@@ -149,7 +166,8 @@ class ToolService:
             recorder.steps.append(
                 {
                     "index": len(recorder.steps) + 1,
-                    "phase": "docker",
+                    "phase": "tool",
+                    "backend": backend,
                     "at": datetime.now(UTC).isoformat(),
                     "tool": tool.key,
                     "command": " ".join(result.command),
@@ -166,7 +184,7 @@ class ToolService:
                 tool_evidence,
                 build_justification(
                     finding=finding,
-                    module_key=f"docker/{tool.key}",
+                    module_key=f"{backend}/{tool.key}",
                     risk=tool.risk,
                     status=status,
                     trace_steps=recorder.steps,
@@ -183,7 +201,7 @@ class ToolService:
                 evidence=evidence,
                 error=result.error,
                 finished_at=datetime.now(UTC),
-                cleanup_status="container_removed",
+                cleanup_status="container_removed" if backend == "docker" else "workspace_removed",
             )
             if result.success:
                 await self.repository.update_finding(
@@ -192,7 +210,7 @@ class ToolService:
                     verified=True,
                     intel={
                         **(finding.intel or {}),
-                        "tool": {"name": tool.key, "run_id": run.id, "image": self.settings.tools.docker_image},
+                        "tool": {"name": tool.key, "run_id": run.id, "backend": backend},
                     },
                 )
             await self.repository.log_action(
@@ -208,7 +226,7 @@ class ToolService:
                 {"error": str(exc)},
                 build_justification(
                     finding=finding,
-                    module_key=f"docker/{tool.key}",
+                    module_key=f"{backend}/{tool.key}",
                     risk=tool.risk,
                     status="failed",
                     trace_steps=recorder.steps,
@@ -249,6 +267,8 @@ class ToolService:
         return fallback
 
     async def build_image(self) -> tuple[int, str]:
+        if self.settings.tools.backend != "docker":
+            return 2, "La construcción de imagen solo aplica al backend docker"
         context = package_dir().parent
         command = docker_build_command(self.settings.tools.docker_image, context)
         proc = await asyncio.create_subprocess_exec(
@@ -260,6 +280,8 @@ class ToolService:
         return proc.returncode or 0, output.decode("utf-8", errors="replace")
 
     def build_image_sync(self) -> tuple[int, str]:
+        if self.settings.tools.backend != "docker":
+            return 2, "La construcción de imagen solo aplica al backend docker"
         context = Path(__file__).resolve().parents[2]
         command = docker_build_command(self.settings.tools.docker_image, context)
         result = subprocess.run(command, capture_output=True, text=True, check=False)

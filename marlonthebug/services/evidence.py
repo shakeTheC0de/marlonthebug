@@ -186,9 +186,10 @@ def to_markdown(run: Any) -> str:
                 "```",
                 "",
             ]
-        elif step.get("phase") == "docker":
+        elif step.get("phase") in {"docker", "tool", "remote", "local"}:
+            backend = step.get("backend", step.get("phase", "tool"))
             lines += [
-                f"### Paso {step.get('index')} — Docker / {step.get('tool', 'herramienta')}",
+                f"### Paso {step.get('index')} — {str(backend).capitalize()} / {step.get('tool', 'herramienta')}",
                 "",
                 f"- **Comando:** `{step.get('command', '')}`",
                 f"- **Return code:** {step.get('returncode', '—')}",

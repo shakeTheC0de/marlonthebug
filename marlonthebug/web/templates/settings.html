@@ -29,30 +29,49 @@
       <div class="check-list">
         <label class="check"><input type="checkbox" name="auto_sync" {% if settings.intel.auto_sync %}checked{% endif %}><span>Sincronizar inteligencia automáticamente</span></label>
         <label class="check"><input type="checkbox" name="offline" {% if settings.intel.offline %}checked{% endif %}><span>Modo offline (no descargar feeds)</span></label>
+        <label class="check"><input type="checkbox" name="require_bundle_signature" {% if settings.intel.require_bundle_signature %}checked{% endif %}><span>Exigir firma Ed25519 al importar bundles</span></label>
       </div>
-      <h3 class="section-title">Docker / herramientas reales</h3>
-      <div class="check-list">
-        <label class="check"><input type="checkbox" name="tools_enabled" {% if settings.tools.enabled %}checked{% endif %}><span>Permitir herramientas externas en Docker</span></label>
-      </div>
-      <label class="field"><span>Imagen Docker</span><input type="text" name="docker_image" value="{{ settings.tools.docker_image }}"></label>
       <div class="form-grid-2">
+        <label class="field"><span>Consultas CPE por activo</span><input type="number" name="max_cpe_lookups" min="1" max="20" value="{{ settings.intel.max_cpe_lookups }}"></label>
+        <label class="field"><span>Clave pública Ed25519 (ruta)</span><input type="text" name="signing_public_key" value="{{ settings.intel.signing_public_key }}" placeholder="/data/config/intel-signing.pub"></label>
+      </div>
+      <h3 class="section-title">Herramientas reales</h3>
+      <div class="check-list">
+        <label class="check"><input type="checkbox" name="tools_enabled" {% if settings.tools.enabled %}checked{% endif %}><span>Permitir herramientas externas</span></label>
+        <label class="check"><input type="checkbox" name="tools_rewrite_localhost" {% if settings.tools.rewrite_localhost %}checked{% endif %}><span>Reescribir localhost a host.docker.internal en backends de contenedor</span></label>
+      </div>
+      <div class="form-grid-2">
+        <label class="field"><span>Backend</span>
+          <select name="tools_backend">
+            <option value="remote" {% if settings.tools.backend == 'remote' %}selected{% endif %}>remote · tools-runner (recomendado)</option>
+            <option value="docker" {% if settings.tools.backend == 'docker' %}selected{% endif %}>docker · contenedor efímero</option>
+            <option value="local" {% if settings.tools.backend == 'local' %}selected{% endif %}>local · herramientas en PATH</option>
+          </select>
+        </label>
+        <label class="field"><span>Timeout por herramienta (s)</span><input type="number" name="tool_timeout" min="30" max="900" value="{{ settings.tools.timeout }}"></label>
+      </div>
+      <div class="form-grid-2">
+        <label class="field"><span>URL del tools-runner</span><input type="text" name="tools_remote_url" value="{{ settings.tools.remote_url }}"></label>
+        <label class="field"><span>Token del tools-runner</span><input type="password" name="tools_remote_token" value="" placeholder="{% if settings.tools.remote_token %}configurado · deja vacío para conservar{% else %}sin token{% endif %}" autocomplete="new-password"></label>
+      </div>
+      <div class="form-grid-2">
+        <label class="field"><span>Imagen Docker</span><input type="text" name="docker_image" value="{{ settings.tools.docker_image }}"></label>
         <label class="field"><span>Red del contenedor</span>
           <select name="docker_network">
             <option value="bridge" {% if settings.tools.network == 'bridge' %}selected{% endif %}>bridge (recomendado)</option>
             <option value="host" {% if settings.tools.network == 'host' %}selected{% endif %}>host (Linux)</option>
           </select>
         </label>
-        <label class="field"><span>Timeout por herramienta (s)</span><input type="number" name="tool_timeout" min="30" max="900" value="{{ settings.tools.timeout }}"></label>
       </div>
       <div class="notice">
-        <strong>Docker</strong>
+        <strong>Motor {{ docker_status.backend or settings.tools.backend }}</strong>
         <p>
           {% if docker_status.available and docker_status.image_ready %}
-          Motor disponible. Imagen <code>{{ settings.tools.docker_image }}</code> lista.
+          Motor disponible{% if docker_status.version %} · versión {{ docker_status.version }}{% endif %}.
           {% elif docker_status.available %}
-          Docker disponible, pero falta la imagen. Ejecuta <code>marlonthebug tools build</code>.
+          Motor disponible, pero falta preparar la imagen. Ejecuta <code>marlonthebug tools build</code>.
           {% else %}
-          Docker no disponible: {{ docker_status.reason or 'arranca Docker Desktop' }}.
+          Motor no disponible: {{ docker_status.reason or 'revisa la configuración y los logs' }}.
           {% endif %}
         </p>
       </div>
