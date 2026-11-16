@@ -25,9 +25,9 @@
 
 ## Próximos pasos recomendados
 
+- Implementar el stack Docker portable panel + tools-runner descrito en `docs/ROADMAP_NEXT.md`.
+- Mejorar la correlación de inteligencia por CPE y versiones.
 - Añadir autenticación multiusuario opcional para despliegues en servidor.
-- Integrar un motor de correlación CPE más preciso para versiones de servidores.
-- Añadir módulos de cloud (AWS/Azure/GCP) y CI/CD supply chain.
 - Firmar los bundles de inteligencia con Ed25519.
 - Añadir retest automatizado y comparación de informes entre ejecuciones.
 - Empaquetar una app de escritorio (Tauri) si se quiere una experiencia sin navegador.
