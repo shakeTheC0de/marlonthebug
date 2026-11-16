@@ -27,6 +27,7 @@ from marlonthebug.services.exploitation import ExploitBlocked
 from marlonthebug.services.reports import ReportRequest
 from marlonthebug.services.scanner import PROFILES
 from marlonthebug.settings import save_settings
+from marlonthebug.tools.catalog import TOOLS
 from marlonthebug.web import serializers
 from marlonthebug.web.deps import (
     get_auth,
@@ -624,6 +625,61 @@ async def delete_finding(request: Request, finding_id: str):
     return redirect_with("/findings", ok="Hallazgo eliminado")
 
 
+# ── Direct tools ───────────────────────────────────────────
+
+
+@router.get("/tools", response_class=HTMLResponse)
+async def tools_page(request: Request):
+    repo = get_repo(request)
+    workspace_id = request.query_params.get("workspace") or None
+    if not workspace_id:
+        workspaces = await repo.list_workspaces()
+        workspace_id = workspaces[0].id if workspaces else None
+    runs = await repo.list_tool_runs(workspace_id, limit=50)
+    return await render(
+        request,
+        "tools.html",
+        nav="tools",
+        workspace_id=workspace_id,
+        runs=runs,
+        tools=sorted(TOOLS.values(), key=lambda item: item.name.lower()),
+        tools_status=await get_tools(request).status(),
+    )
+
+
+@router.post("/tools/target")
+async def run_target_tool(request: Request):
+    from marlonthebug.services.exploitation import ExploitBlocked
+
+    form = await request.form()
+    require_csrf(request, form)
+    workspace_id = str(form.get("workspace_id", ""))
+    target = str(form.get("target", ""))
+    tool_key = str(form.get("tool", ""))
+    confirm_text = str(form.get("confirm_text", ""))
+    try:
+        run = await get_tools(request).run_target(workspace_id, target, tool_key, confirm_text, operator="panel")
+    except ExploitBlocked as exc:
+        return redirect_with(f"/tools?workspace={workspace_id}", err=str(exc))
+    if run.status == "success":
+        return redirect_with(f"/tools/runs/{run.id}", ok="Herramienta ejecutada; evidencia guardada")
+    return redirect_with(f"/tools/runs/{run.id}", err="La herramienta terminó sin confirmación; revisa la salida")
+
+
+@router.get("/tools/runs/{run_id}", response_class=HTMLResponse)
+async def tool_run_detail(request: Request, run_id: str):
+    run = await get_repo(request).get_tool_run(run_id)
+    if not run:
+        raise HTTPException(404, "Ejecución de herramienta no encontrada")
+    return await render(
+        request,
+        "tool_run_detail.html",
+        nav="tools",
+        workspace_id=run.workspace_id,
+        run=run,
+    )
+
+
 # ── Exploitation ───────────────────────────────────────────
 
 
@@ -1173,6 +1229,28 @@ async def api_finding(request: Request, finding_id: str):
     if not finding:
         raise HTTPException(404, "Hallazgo no encontrado")
     return serializers.finding_dict(finding, include_evidence=True)
+
+
+@router.get("/api/tool-runs/{run_id}")
+async def api_tool_run(request: Request, run_id: str):
+    run = await get_repo(request).get_tool_run(run_id)
+    if not run:
+        raise HTTPException(404, "Ejecución de herramienta no encontrada")
+    return {
+        "id": run.id,
+        "tool": run.tool,
+        "target": run.target,
+        "risk": run.risk,
+        "status": run.status,
+        "payload": run.payload,
+        "output": run.output,
+        "error": run.error,
+        "evidence": run.evidence,
+        "operator": run.operator,
+        "cleanup_status": run.cleanup_status,
+        "started_at": serializers.iso(run.started_at),
+        "finished_at": serializers.iso(run.finished_at),
+    }
 
 
 @router.get("/api/scans")

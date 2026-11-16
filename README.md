@@ -134,6 +134,7 @@ marlonthebug exploit status
 marlonthebug exploit build   # imagen del contenedor efímero de explotación
 marlonthebug tools status
 marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
+marlonthebug tools target --workspace acme-audit --target https://app.example.com --tool ffuf --confirm-text EXPLOTAR
 marlonthebug backup --output ~/backups/acme-audit.tar.gz
 marlonthebug restore ~/backups/acme-audit.tar.gz --data-dir ./mtb-data --force
 ```
@@ -248,7 +249,9 @@ MTB_TOOLS_TOKEN=... marlonthebug tools runner --host 127.0.0.1 --port 8080
 ```
 
 Desde el panel: abre un hallazgo con explotación activada y usa
-**Herramientas reales → Ejecutar herramienta**.
+**Herramientas reales → Ejecutar herramienta**, o entra en **Herramientas** para
+lanzar una herramienta directamente contra un objetivo autorizado sin crear un
+hallazgo.
 
 Medidas de seguridad:
 

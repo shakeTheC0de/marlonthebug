@@ -259,6 +259,7 @@ def test_panel_pages_render(app_paths: AppPaths) -> None:
         assert client.get("/findings").status_code == 200
         assert client.get("/reports/new").status_code == 200
         assert client.get("/intel").status_code == 200
+        assert client.get("/tools").status_code == 200
         assert client.get("/settings").status_code == 200
         assert client.get("/api/workspaces").status_code == 200
 

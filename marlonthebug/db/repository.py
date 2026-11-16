@@ -21,6 +21,7 @@ from marlonthebug.db.models import (
     ReportModel,
     ScanRunModel,
     TargetModel,
+    ToolRunModel,
     WorkspaceModel,
     utcnow,
 )
@@ -592,6 +593,65 @@ class Repository:
                 statement = statement.where(ExploitRunModel.workspace_id == workspace_id)
             if finding_id:
                 statement = statement.where(ExploitRunModel.finding_id == finding_id)
+            result = await session.execute(statement)
+            return list(result.scalars().all())
+
+    # ── Direct tool runs ────────────────────────────────────
+
+    async def create_tool_run(
+        self,
+        workspace_id: str,
+        tool: str,
+        target: str,
+        risk: str = "medium",
+        payload: dict | None = None,
+        operator: str = "panel",
+        target_id: str | None = None,
+    ) -> ToolRunModel:
+        async with self.db.session() as session:
+            run = ToolRunModel(
+                workspace_id=workspace_id,
+                target_id=target_id,
+                tool=tool,
+                target=target,
+                risk=risk,
+                payload=payload or {},
+                operator=operator,
+                status="running",
+            )
+            session.add(run)
+            await session.flush()
+            return run
+
+    async def update_tool_run(self, run_id: str, **fields: Any) -> ToolRunModel | None:
+        async with self.db.session() as session:
+            run = await session.get(ToolRunModel, run_id)
+            if not run:
+                return None
+            for key, value in fields.items():
+                if hasattr(run, key):
+                    setattr(run, key, value)
+            return run
+
+    async def get_tool_run(self, run_id: str) -> ToolRunModel | None:
+        async with self.db.session() as session:
+            result = await session.execute(
+                select(ToolRunModel)
+                .options(selectinload(ToolRunModel.workspace), selectinload(ToolRunModel.target_ref))
+                .where(ToolRunModel.id == run_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def list_tool_runs(self, workspace_id: str | None = None, limit: int = 100) -> list[ToolRunModel]:
+        async with self.db.session() as session:
+            statement = (
+                select(ToolRunModel)
+                .options(selectinload(ToolRunModel.workspace))
+                .order_by(ToolRunModel.created_at.desc())
+                .limit(limit)
+            )
+            if workspace_id:
+                statement = statement.where(ToolRunModel.workspace_id == workspace_id)
             result = await session.execute(statement)
             return list(result.scalars().all())
 

@@ -815,6 +815,50 @@ async def _tools_run(finding_id: str, tool: str, confirm_text: str, data_dir: st
         await database.close()
 
 
+@tools_app.command("target")
+def tools_target(
+    workspace_name: str = typer.Option(..., "--workspace", "-w", help="Proyecto que define el alcance"),
+    target: str = typer.Option(..., "--target", "-t", help="URL, host o IP autorizada"),
+    tool: str = typer.Option(..., "--tool", help="Herramienta del catálogo"),
+    confirm_text: str = typer.Option(..., "--confirm-text", help="Escribe EXPLOTAR"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Ejecuta una herramienta directamente contra un objetivo autorizado."""
+    asyncio.run(_tools_target(workspace_name, target, tool, confirm_text, data_dir))
+
+
+async def _tools_target(
+    workspace_name: str,
+    target: str,
+    tool: str,
+    confirm_text: str,
+    data_dir: str | None,
+) -> None:
+    from marlonthebug.services.exploitation import ExploitBlocked
+    from marlonthebug.tools.service import ToolService
+
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    database, repository = await _repo(paths)
+    try:
+        workspace = await repository.get_workspace_by_name(workspace_name)
+        if not workspace:
+            console.print(f"[red]Proyecto no encontrado: {workspace_name}[/red]")
+            raise typer.Exit(1)
+        service = ToolService(repository, settings, paths)
+        try:
+            run = await service.run_target(workspace.id, target, tool, confirm_text, operator="cli")
+        except ExploitBlocked as exc:
+            console.print(f"[red]Bloqueado:[/red] {exc}")
+            raise typer.Exit(1) from exc
+        console.print(f"[bold]Estado:[/bold] {run.status}")
+        console.print(run.output[:12000] or run.error or "Sin salida")
+        if run.evidence:
+            console.print(f"[dim]Evidencia: {run.id}[/dim]")
+    finally:
+        await database.close()
+
+
 @tools_app.command("runner")
 def tools_runner(
     host: str = typer.Option("0.0.0.0", "--host", help="Host de escucha del runner"),

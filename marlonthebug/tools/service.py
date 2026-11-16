@@ -7,7 +7,9 @@ import logging
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from urllib.parse import urlparse
 
 from marlonthebug.core.scope import ScopeGuard, scope_from_workspace
 from marlonthebug.db.models import ExploitRunModel, FindingModel
@@ -246,6 +248,181 @@ class ToolService:
         finally:
             reset_trace(token)
         return await self.repository.get_exploit_run(run.id) or run
+
+    async def run_target(
+        self,
+        workspace_id: str,
+        target: str,
+        tool_key: str,
+        confirm_text: str,
+        operator: str = "panel",
+    ):
+        """Run an allowlisted tool directly against an authorized target."""
+        from marlonthebug.exploit.trace import TraceRecorder, reset_trace, set_trace
+        from marlonthebug.services.evidence import build_justification, extract_highlights, finalize_evidence
+
+        workspace = await self.repository.get_workspace(workspace_id)
+        if not workspace:
+            raise ExploitBlocked("Proyecto no encontrado")
+        if not workspace.allow_exploitation:
+            raise ExploitBlocked("La explotación está desactivada en este proyecto")
+        if confirm_text.strip().upper() not in CONFIRMATION_WORDS:
+            raise ExploitBlocked("Escribe EXPLOTAR para confirmar la ejecución")
+        tool = tool_by_key(tool_key)
+        if not tool:
+            raise ExploitBlocked(f"Herramienta no encontrada: {tool_key}")
+
+        raw_target = target.strip()
+        endpoint = raw_target if "://" in raw_target else f"https://{raw_target}"
+        parsed = urlparse(endpoint)
+        host = parsed.hostname or raw_target.split(":")[0]
+        if not host:
+            raise ExploitBlocked("Objetivo no válido")
+        scope = scope_from_workspace(
+            workspace.scope or {},
+            allow_exploitation=workspace.allow_exploitation,
+            require_confirmation=workspace.require_confirmation,
+        )
+        if not scope.is_url_allowed(endpoint) and not scope.is_target_allowed(host):
+            raise ExploitBlocked(f"El objetivo queda fuera del alcance autorizado: {target}")
+
+        finding = SimpleNamespace(
+            id="",
+            title=f"Ejecución directa de {tool.name}",
+            description="Ejecución directa de herramienta contra un objetivo autorizado.",
+            plugin_name=tool.plugins[0] if tool.plugins else "",
+            severity="info",
+            cvss_score=0.0,
+            cvss_vector="",
+            cwe="",
+            owasp="",
+            endpoint=endpoint,
+            target_host=host,
+            target=SimpleNamespace(host=host),
+            evidence={},
+            remediation="",
+            kev=False,
+            epss=0.0,
+            intel={},
+        )
+        target_url, args = build_command(tool, finding)
+        if self.settings.tools.backend in {"docker", "remote"} and self.settings.tools.rewrite_localhost:
+            reachable_url = docker_url(target_url)
+            if reachable_url != target_url:
+                args = [item.replace(target_url, reachable_url) for item in args]
+            target_url = reachable_url
+        backend = self.settings.tools.backend
+        recorder = TraceRecorder(
+            metadata={
+                "backend": backend,
+                "tool": tool.key,
+                "target": target_url,
+                "operator": operator,
+                "workspace": workspace.name,
+                "direct": True,
+            }
+        )
+        recorder.note(
+            "authorization",
+            "Herramienta autorizada contra un objetivo del proyecto",
+            {"workspace": workspace.name, "confirmation": "EXPLOTAR", "target": target_url},
+        )
+        recorder.note(
+            "preflight",
+            "Ejecución directa de herramienta",
+            {"backend": backend, "tool": tool.key, "image": self.settings.tools.docker_image},
+        )
+        token = set_trace(recorder)
+        run = await self.repository.create_tool_run(
+            workspace_id=workspace.id,
+            tool=tool.key,
+            target=target_url,
+            risk=tool.risk,
+            payload={"args": args, "backend": backend},
+            operator=operator,
+        )
+        await self.repository.update_tool_run(run.id, status="running", started_at=datetime.now(UTC))
+        await self.repository.log_action(
+            "tool.target.start",
+            actor=operator,
+            target=host,
+            detail={"workspace_id": workspace.id, "tool": tool.key},
+        )
+        try:
+            result = await self.runner.run(tool.key, args, target_url, tty=tool.needs_tty)
+            status = "success" if result.success else "failed"
+            recorder.steps.append(
+                {
+                    "index": len(recorder.steps) + 1,
+                    "phase": "tool",
+                    "backend": backend,
+                    "at": datetime.now(UTC).isoformat(),
+                    "tool": tool.key,
+                    "command": " ".join(result.command),
+                    "returncode": result.evidence.get("returncode"),
+                    "duration": result.duration,
+                    "message": result.evidence.get("classification", ""),
+                }
+            )
+            evidence_payload = result.evidence
+            if "highlights" not in evidence_payload:
+                evidence_payload = {**evidence_payload, "highlights": extract_highlights(evidence_payload)}
+            evidence = finalize_evidence(
+                evidence_payload,
+                build_justification(
+                    finding=finding,
+                    module_key=f"{backend}/{tool.key}",
+                    risk=tool.risk,
+                    status=status,
+                    trace_steps=recorder.steps,
+                    output=result.output or result.error,
+                    operator=operator,
+                    workspace=workspace,
+                ),
+                recorder.steps,
+            )
+            await self.repository.update_tool_run(
+                run.id,
+                status=status,
+                output=result.output,
+                evidence=evidence,
+                error=result.error,
+                finished_at=datetime.now(UTC),
+                cleanup_status="container_removed" if backend in {"docker", "remote"} else "workspace_removed",
+            )
+            await self.repository.log_action(
+                "tool.target.finish",
+                actor=operator,
+                target=host,
+                detail={"workspace_id": workspace.id, "tool": tool.key, "status": status},
+            )
+        except Exception as exc:
+            logger.exception("Direct tool execution failed")
+            recorder.note("error", str(exc))
+            evidence = finalize_evidence(
+                {"error": str(exc), "backend": backend},
+                build_justification(
+                    finding=finding,
+                    module_key=f"{backend}/{tool.key}",
+                    risk=tool.risk,
+                    status="failed",
+                    trace_steps=recorder.steps,
+                    output=str(exc),
+                    operator=operator,
+                    workspace=workspace,
+                ),
+                recorder.steps,
+            )
+            await self.repository.update_tool_run(
+                run.id,
+                status="failed",
+                error=str(exc),
+                evidence=evidence,
+                finished_at=datetime.now(UTC),
+            )
+        finally:
+            reset_trace(token)
+        return await self.repository.get_tool_run(run.id) or run
 
     async def _resolve_url(self, url: str) -> str:
         import httpx

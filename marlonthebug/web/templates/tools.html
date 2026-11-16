@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, empty_state %}
+{% block title %}Herramientas · MarlonTheBug{% endblock %}
+{% block page_title %}Multiherramienta{% endblock %}
+{% block page_subtitle %}Ejecuta herramientas reales contra objetivos autorizados y guarda la evidencia{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:16px">
+  <div class="card-head">
+    <div><span class="eyebrow">Motor</span><h2>{{ (tools_status.backend or 'docker')|capitalize }}</h2></div>
+    {% if tools_status.available and tools_status.image_ready %}
+    <span class="badge exploit-success">listo</span>
+    {% elif tools_status.available %}
+    <span class="badge exploit-not_applicable">imagen pendiente</span>
+    {% else %}
+    <span class="badge exploit-failed">no disponible</span>
+    {% endif %}
+  </div>
+  <div class="muted small">
+    Backend: <code>{{ tools_status.backend or 'docker' }}</code>
+    {% if tools_status.backend == 'docker' %} · Imagen: <code>{{ tools_status.image }}</code>{% endif %}
+    {% if tools_status.backend == 'remote' %} · Runner: <code>{{ tools_status.url }}</code>{% endif %}
+    {% if not tools_status.available %} · {{ tools_status.reason or 'revisa la configuración' }}{% endif %}
+  </div>
+</div>
+
+<section class="card" style="margin-bottom:16px">
+  <div class="card-head">
+    <div><span class="eyebrow">Ejecución directa</span><h2>Lanzar herramienta</h2></div>
+    <span class="tag">Solo sistemas autorizados</span>
+  </div>
+  <p class="muted">La herramienta se ejecuta en el backend aislado, con timeout y límites. No hay que crear un hallazgo: el objetivo se valida contra el alcance del proyecto.</p>
+  <form method="post" action="/tools/target" class="stack" data-confirm="¿Ejecutar la herramienta contra el objetivo indicado?">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-grid-2">
+      <label class="field"><span>Proyecto / alcance</span>
+        <select name="workspace_id" required>
+          {% for workspace in workspaces %}
+          <option value="{{ workspace.id }}" {% if workspace.id == workspace_id %}selected{% endif %}>{{ workspace.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Herramienta</span>
+        <select name="tool" required>
+          {% for tool in tools %}
+          <option value="{{ tool.key }}">{{ tool.name }} · riesgo {{ tool.risk }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label class="field"><span>Objetivo (URL, host o IP dentro del alcance)</span>
+      <input type="text" name="target" placeholder="https://objetivo.example o 10.0.0.10" required>
+    </label>
+    <label class="field"><span>Confirmación</span>
+      <input type="text" name="confirm_text" placeholder="Escribe EXPLOTAR" autocomplete="off" required>
+    </label>
+    <button class="btn btn-primary" type="submit" {% if not tools_status.available %}disabled{% endif %}>{{ icon('cpu', 16) }} Ejecutar herramienta</button>
+  </form>
+</section>
+
+<section class="card no-pad">
+  <div class="card-head" style="padding:16px 18px 0">
+    <div><span class="eyebrow">Historial</span><h2>Ejecuciones directas</h2></div>
+    <span class="pill">{{ runs|length }}</span>
+  </div>
+  {% if runs %}
+  <div class="table-wrap">
+    <table class="table compact">
+      <thead><tr><th>Estado</th><th>Herramienta</th><th>Objetivo</th><th>Riesgo</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><span class="badge exploit-{{ run.status }}">{{ run.status }}</span></td>
+        <td class="mono">{{ run.tool }}</td>
+        <td class="mono small break-all">{{ run.target }}</td>
+        <td><span class="tag risk-{{ run.risk }}">{{ run.risk }}</span></td>
+        <td class="muted small">{{ run.created_at|datetimefmt }}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="/tools/runs/{{ run.id }}">Evidencia</a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty_state('Sin ejecuciones directas', 'Elige un proyecto, una herramienta y un objetivo autorizado para empezar.', 'cpu') }}
+  {% endif %}
+</section>
+{% endblock %}
