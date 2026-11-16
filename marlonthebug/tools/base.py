@@ -65,7 +65,7 @@ def classify_output(tool: str, output: str) -> tuple[bool, str]:
         ):
             return True, "commix identificó y verificó command injection"
         return False, "commix no devolvió una confirmación de inyección"
-    if tool in {"whatweb", "nikto", "nmap"}:
+    if tool in {"whatweb", "nikto", "nmap", "ffuf"}:
         return True, "herramienta ejecutada; revisa la salida"
     return False, "sin marcador de confirmación"
 

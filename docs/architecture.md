@@ -150,7 +150,7 @@ publica puertos y corre con rootfs de solo lectura excepto `/work` y `/tmp`
 (tmpfs). El `exploit-runner` es el único con el socket, solo lanza contenedores
 hijos efímeros y no ejecuta el módulo en su propio proceso.
 
-Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hydra.
+Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hydra. `ffuf` usa una wordlist integrada de rutas y APIs.
 
 ## Portabilidad
 

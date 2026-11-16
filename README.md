@@ -233,7 +233,8 @@ El motor de herramientas admite tres backends:
 | `local` | Herramientas instaladas en `PATH` | Desarrollo y laboratorio |
 
 La imagen incluye `sqlmap`, `nuclei`, `commix`, `whatweb`, `nikto`, `nmap`,
-`ffuf`, `gobuster` y `hydra`.
+`ffuf`, `gobuster` y `hydra`. `ffuf` está integrado en el catálogo con una
+wordlist de rutas y API (incluye `/api/docs`, `/api/v1/*`, OpenAPI, etc.).
 
 ```bash
 # Comprobar el motor configurado

@@ -42,9 +42,10 @@ RUN pip3 install --no-cache-dir --break-system-packages \
         "uvicorn>=0.32,<1"
 
 # Small standalone service: no panel dependencies, no Docker socket.
-RUN mkdir -p /opt/mtb/marlonthebug/tools
+RUN mkdir -p /opt/mtb/marlonthebug/tools /opt/mtb/wordlists
 COPY marlonthebug/__init__.py /opt/mtb/marlonthebug/__init__.py
 COPY marlonthebug/tools/runner_api.py marlonthebug/tools/proc.py /opt/mtb/marlonthebug/tools/
+COPY marlonthebug/fuzzer/wordlists/directories.txt /opt/mtb/wordlists/common.txt
 RUN touch /opt/mtb/marlonthebug/tools/__init__.py
 
 RUN useradd --create-home --uid 10001 mtb \

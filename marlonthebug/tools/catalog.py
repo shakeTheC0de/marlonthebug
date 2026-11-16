@@ -109,6 +109,30 @@ def _nmap(url: str, finding: Any) -> list[str]:
     return ["nmap", "-Pn", "-sV", "--top-ports", "100", "-T4", _host(finding)]
 
 
+def _ffuf(url: str, finding: Any) -> list[str]:
+    parsed = urlparse(url)
+    root = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme else url.rstrip("/")
+    target = f"{root}/FUZZ"
+    return [
+        "ffuf",
+        "-u",
+        target,
+        "-w",
+        "/opt/mtb/wordlists/common.txt",
+        "-mc",
+        "200,204,301,302,307,401,403",
+        "-t",
+        "10",
+        "-rate",
+        "10",
+        "-timeout",
+        "10",
+        "-s",
+        "-H",
+        "User-Agent: MarlonTheBug/2.0 (authorized security assessment)",
+    ]
+
+
 TOOLS: dict[str, ToolSpec] = {
     "sqlmap": ToolSpec(
         key="sqlmap",
@@ -168,6 +192,14 @@ TOOLS: dict[str, ToolSpec] = {
         risk="medium",
         plugins=("tech_fingerprint", "cloud_dashboards"),
         build_args=_nmap,
+    ),
+    "ffuf": ToolSpec(
+        key="ffuf",
+        name="ffuf",
+        description="Descubrimiento de rutas y endpoints con wordlist integrada.",
+        risk="low",
+        plugins=("endpoint_discovery", "openapi", "tech_fingerprint"),
+        build_args=_ffuf,
     ),
 }
 

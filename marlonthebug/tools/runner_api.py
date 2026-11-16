@@ -132,6 +132,22 @@ TOOL_POLICIES: dict[str, ToolPolicy] = {
         },
         target_kind="host",
     ),
+    "ffuf": ToolPolicy(
+        key="ffuf",
+        flags={
+            "-u": URL_RE.pattern,
+            "-w": r"^/opt/mtb/wordlists/[A-Za-z0-9._-]+$",
+            "-mc": r"^[0-9,-]+$",
+            "-fc": r"^[0-9,-]+$",
+            "-fs": r"^[0-9,-]+$",
+            "-t": r"^([1-9]|[1-4][0-9]|50)$",
+            "-rate": r"^([1-9]|[1-9][0-9]|100)$",
+            "-timeout": r"^([1-9]|[1-9][0-9]|120)$",
+            "-s": None,
+            "-H": r"^[A-Za-z0-9-]+:\s?.{1,200}$",
+        },
+        target_kind="url",
+    ),
 }
 
 
@@ -298,6 +314,16 @@ def validate_run_request(payload: Any) -> RunRequest:
         found_target = any(
             item in target_candidates or any(item.endswith(f"={candidate}") for candidate in target_candidates)
             for item in args[1:]
+        )
+    if not found_target and tool == "ffuf":
+        parsed_target = urlparse(target)
+        base = (
+            f"{parsed_target.scheme}://{parsed_target.netloc}"
+            if parsed_target.scheme and parsed_target.netloc
+            else target.split("?")[0].rstrip("/")
+        )
+        found_target = any(
+            item == target or (item.startswith(base.rstrip("/") + "/") and item.endswith("/FUZZ")) for item in args[1:]
         )
     if not found_target:
         raise ToolValidationError("El objetivo no aparece en los argumentos")
