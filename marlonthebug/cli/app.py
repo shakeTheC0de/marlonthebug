@@ -821,10 +821,11 @@ def tools_target(
     target: str = typer.Option(..., "--target", "-t", help="URL, host o IP autorizada"),
     tool: str = typer.Option(..., "--tool", help="Herramienta del catálogo"),
     confirm_text: str = typer.Option(..., "--confirm-text", help="Escribe EXPLOTAR"),
+    add_to_scope: bool = typer.Option(False, "--add-to-scope", help="Añadir el host al alcance del proyecto"),
     data_dir: str | None = typer.Option(None, "--data-dir"),
 ) -> None:
     """Ejecuta una herramienta directamente contra un objetivo autorizado."""
-    asyncio.run(_tools_target(workspace_name, target, tool, confirm_text, data_dir))
+    asyncio.run(_tools_target(workspace_name, target, tool, confirm_text, add_to_scope, data_dir))
 
 
 async def _tools_target(
@@ -832,6 +833,7 @@ async def _tools_target(
     target: str,
     tool: str,
     confirm_text: str,
+    add_to_scope: bool,
     data_dir: str | None,
 ) -> None:
     from marlonthebug.services.exploitation import ExploitBlocked
@@ -845,6 +847,14 @@ async def _tools_target(
         if not workspace:
             console.print(f"[red]Proyecto no encontrado: {workspace_name}[/red]")
             raise typer.Exit(1)
+        if add_to_scope:
+            from urllib.parse import urlparse
+
+            candidate = target.strip()
+            endpoint = candidate if "://" in candidate else f"https://{candidate}"
+            host = urlparse(endpoint).hostname
+            if host:
+                await repository.add_target(workspace.id, host)
         service = ToolService(repository, settings, paths)
         try:
             run = await service.run_target(workspace.id, target, tool, confirm_text, operator="cli")

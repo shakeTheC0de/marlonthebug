@@ -54,6 +54,7 @@
     <label class="field"><span>Confirmación</span>
       <input type="text" name="confirm_text" placeholder="Escribe EXPLOTAR" autocomplete="off" required>
     </label>
+    <label class="check"><input type="checkbox" name="add_to_scope"><span>Añadir este host al alcance del proyecto (solo si está autorizado)</span></label>
     <button class="btn btn-primary" type="submit" {% if not tools_status.available %}disabled{% endif %}>{{ icon('cpu', 16) }} Ejecutar herramienta</button>
   </form>
 </section>

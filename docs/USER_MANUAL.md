@@ -122,6 +122,7 @@ marlonthebug tools status    # comprobar backend, Docker o runner
 marlonthebug tools build     # solo backend docker: construir imagen Kali
 marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
 marlonthebug tools target --workspace <proyecto> --target https://host --tool ffuf --confirm-text EXPLOTAR
+# --add-to-scope añade el host al alcance del proyecto antes de ejecutar
 ```
 
 En el panel, abre un hallazgo con explotación activada y usa **Herramientas

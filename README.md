@@ -148,6 +148,8 @@ marlonthebug exploit build   # imagen del contenedor efímero de explotación
 marlonthebug tools status
 marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
 marlonthebug tools target --workspace acme-audit --target https://app.example.com --tool ffuf --confirm-text EXPLOTAR
+# Si el host aún no está en el alcance del proyecto:
+marlonthebug tools target --workspace acme-audit --target https://app.example.com --tool nmap --confirm-text EXPLOTAR --add-to-scope
 marlonthebug backup --output ~/backups/acme-audit.tar.gz
 marlonthebug restore ~/backups/acme-audit.tar.gz --data-dir ./mtb-data --force
 ```

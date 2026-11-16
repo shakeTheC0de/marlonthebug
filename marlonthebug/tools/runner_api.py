@@ -144,6 +144,7 @@ TOOL_POLICIES: dict[str, ToolPolicy] = {
             "-rate": r"^([1-9]|[1-9][0-9]|100)$",
             "-timeout": r"^([1-9]|[1-9][0-9]|120)$",
             "-s": None,
+            "-ac": None,
             "-H": r"^[A-Za-z0-9-]+:\s?.{1,200}$",
         },
         target_kind="url",

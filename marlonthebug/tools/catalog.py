@@ -128,6 +128,7 @@ def _ffuf(url: str, finding: Any) -> list[str]:
         "-timeout",
         "10",
         "-s",
+        "-ac",
         "-H",
         "User-Agent: MarlonTheBug/2.0 (authorized security assessment)",
     ]

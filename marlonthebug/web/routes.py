@@ -657,6 +657,14 @@ async def run_target_tool(request: Request):
     target = str(form.get("target", ""))
     tool_key = str(form.get("tool", ""))
     confirm_text = str(form.get("confirm_text", ""))
+    if bool(form.get("add_to_scope")) and target.strip():
+        from urllib.parse import urlparse
+
+        candidate = target.strip()
+        endpoint = candidate if "://" in candidate else f"https://{candidate}"
+        host = urlparse(endpoint).hostname
+        if host:
+            await get_repo(request).add_target(workspace_id, host)
     try:
         run = await get_tools(request).run_target(workspace_id, target, tool_key, confirm_text, operator="panel")
     except ExploitBlocked as exc:
