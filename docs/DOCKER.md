@@ -5,15 +5,19 @@ solo comando. No necesitas Python, `uv` ni el socket de Docker en el equipo.
 
 ```
 docker compose up -d
-├── panel          FastAPI + SQLite + ./mtb-data
-│                  127.0.0.1:8765, sin Docker CLI ni socket
-└── tools-runner   Kali + sqlmap/nuclei/commix/whatweb/nikto/nmap
-                   red interna, token, usuario sin privilegios
+├── panel           FastAPI + SQLite + ./mtb-data
+│                   127.0.0.1:8765, sin Docker CLI ni socket
+├── tools-runner    Kali + sqlmap/nuclei/commix/whatweb/nikto/nmap
+│                   red interna, token, usuario sin privilegios
+└── exploit-runner  controlador con socket de Docker
+                    lanza un contenedor efímero por explotación
+                    el hijo devuelve solo resultados, credenciales y accesos
 ```
 
-El panel llama al `tools-runner` por HTTP interno (`http://tools-runner:8080`).
-El runner ejecuta la herramienta dentro de su propio contenedor y devuelve
-salida, código de retorno y duración. No hay Docker-in-Docker.
+El panel llama al `tools-runner` por HTTP interno (`http://tools-runner:8080`) y
+al `exploit-runner` (`http://exploit-runner:8090`). El `exploit-runner` es el
+único servicio con acceso a `/var/run/docker.sock`; no ejecuta código de
+explotación: valida la petición y lanza un contenedor hijo de un solo uso.
 
 ## Requisitos
 
@@ -32,7 +36,7 @@ cd marlonthebug
 El script:
 
 1. Copia `.env.example` a `.env` si no existe.
-2. Genera `MTB_TOOLS_TOKEN` con `openssl` o Python.
+2. Genera `MTB_TOOLS_TOKEN` y `MTB_EXPLOIT_TOKEN` con `openssl` o Python.
 3. Ajusta `MTB_UID`/`MTB_GID` al usuario del host en Linux.
 4. Crea `./mtb-data`.
 5. Descarga las imágenes de GHCR o las construye localmente.
@@ -72,9 +76,28 @@ docker compose logs panel | grep -i "token\|panel"
 |---|---|---|---|
 | `panel` | `127.0.0.1:8765` | `./mtb-data:/data` | `cap_drop: ALL`, `no-new-privileges`, rootfs read-only, sin socket |
 | `tools-runner` | solo red interna (`expose`) | tmpfs `/work` y `/tmp` | usuario sin privilegios, `cap_drop: ALL`, límites de CPU/memoria, rootfs read-only |
+| `exploit-runner` | solo red interna (`expose`) | socket de Docker | controlador root, `no-new-privileges`, rootfs read-only, solo lanza contenedores hijos |
 
-El `tools-runner` no publica puertos. Solo es alcanzable desde la red de Compose.
-El panel no monta `/var/run/docker.sock`.
+El `tools-runner` y el `exploit-runner` no publican puertos. Solo son
+alcanzables desde la red de Compose. El panel no monta
+`/var/run/docker.sock`; el `exploit-runner` sí, porque necesita crear el
+contenedor efímero de cada explotación.
+
+Cada explotación se ejecuta en un contenedor hijo con:
+
+- `--rm`, sin volúmenes, sin base de datos y sin socket.
+- `--cap-drop ALL`, `--security-opt no-new-privileges`, `--read-only`, tmpfs
+  `/tmp`, usuario `10002:10002`, CPU/memoria/PIDs limitados.
+- Red `bridge` por defecto (o `MTB_EXPLOIT_NETWORK` para un laboratorio).
+- Entrada JSON por `stdin` y salida JSON por `stdout` con resultado,
+  credenciales/passwords y accesos obtenidos. Nada más se exporta.
+- Timeout y eliminación forzada del contenedor si se excede.
+
+> El `exploit-runner` tiene acceso al socket de Docker, equivalente a root en el
+> host. Trátalo como un componente privilegiado: no lo publiques, mantén el
+> token en secreto, revisa sus logs y no ejecutes imágenes de explotación que no
+> hayas construido tú. El panel sigue sin socket y el código del módulo se
+> ejecuta en el hijo efímero.
 
 `tools-runner` valida cada petición:
 
@@ -205,11 +228,11 @@ cambies el mapeo a `0.0.0.0` salvo que tengas firewall y TLS delante.
 
 ### Endurecimiento adicional
 
-- Mantén `MTB_TOOLS_TOKEN` y `panel.token` fuera de Git y de capturas.
+- Mantén `MTB_TOOLS_TOKEN`, `MTB_EXPLOIT_TOKEN` y `panel.token` fuera de Git y de capturas.
 - Rota el token si sospechas que se ha filtrado:
   ```bash
   docker compose down
-  # edita MTB_TOOLS_TOKEN en .env con un valor nuevo
+  # edita MTB_TOOLS_TOKEN y MTB_EXPLOIT_TOKEN en .env con valores nuevos
   docker compose up -d
   ```
   El token del panel (`panel.token`) se puede rotar borrando el archivo con el
@@ -233,6 +256,14 @@ cambies el mapeo a `0.0.0.0` salvo que tengas firewall y TLS delante.
 | `MTB_TOOLS_TIMEOUT` | `180` | Timeout por herramienta (s) |
 | `MTB_TOOLS_CONCURRENCY` | `2` | Ejecuciones simultáneas en el runner |
 | `MTB_TOOLS_MAX_OUTPUT` | `60000` | Caracteres máximos de salida |
+| `MTB_EXPLOIT_TOKEN` | — | Token compartido panel ↔ exploit-runner |
+| `MTB_EXPLOIT_BACKEND` | `runner` | `runner`, `docker` o `local` |
+| `MTB_EXPLOIT_URL` | `http://exploit-runner:8090` | URL interna del exploit-runner |
+| `MTB_EXPLOIT_IMAGE` | `ghcr.io/…/marlonthebug-exploit:latest` | Imagen de explotación |
+| `MTB_EXPLOIT_TIMEOUT` | `150` | Timeout del contenedor de explotación |
+| `MTB_EXPLOIT_NETWORK` | `bridge` | Red del hijo; usa la red de Compose para labs internos |
+| `MTB_EXPLOIT_MEMORY` | `512m` | Memoria máxima del hijo |
+| `MTB_EXPLOIT_CPUS` | `1.0` | CPUs máximas del hijo |
 | `MTB_UID` / `MTB_GID` | `10001` | UID/GID con el que corren los contenedores |
 | `MTB_INTEL_OFFLINE` | `0` | `1` desactiva la descarga de feeds |
 | `MTB_MAX_CPE_LOOKUPS` | `5` | Consultas CPE por activo al correlacionar |
@@ -264,6 +295,19 @@ docker compose exec tools-runner curl -fsS http://127.0.0.1:8080/healthz
 
 Comprueba que `MTB_TOOLS_TOKEN` coincide en ambos servicios. El panel sigue
 funcionando si el runner está caído; mostrará el error en la ficha del hallazgo.
+
+**La explotación aislada no está disponible**
+
+```bash
+docker compose logs --tail=80 exploit-runner
+docker compose exec exploit-runner python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8090/healthz').read().decode())"
+docker compose build exploit-runner
+```
+
+Comprueba que `MTB_EXPLOIT_TOKEN` coincide en panel y runner, que la imagen
+`marlonthebug-exploit` existe y que el socket está montado solo en
+`exploit-runner`. Si actualizas desde una versión anterior, añade
+`MTB_EXPLOIT_TOKEN` a `.env` (o vuelve a ejecutar `scripts/install.sh`).
 
 **Token inválido**
 

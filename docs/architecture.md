@@ -109,7 +109,19 @@ Esto elimina los falsos positivos típicos de aplicaciones SPA que devuelven HTT
 4. Que el endpoint siga dentro del scope.
 5. Que el módulo esté mapeado al plugin del hallazgo.
 
-Cada ejecución se registra en `exploit_runs` y en el audit log. `exploit/trace.py` captura cada petición y respuesta en un contextvar, y `services/evidence.py` genera la justificación, los comandos de reproducción y el hash SHA-256. La evidencia se muestra en el panel, se exporta en Markdown/JSON y se incorpora a los informes. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
+Cada ejecución se registra en `exploit_runs` y en el audit log. `exploit/trace.py` captura cada petición y respuesta en un contextvar, y `services/evidence.py` genera la justificación, los comandos de reproducción y el hash SHA-256. La evidencia se muestra en el panel, se exporta en Markdown/JSON e incluye **credenciales, contraseñas, hashes, tokens y accesos** demostrados. Los módulos incluidos son pruebas de concepto reversibles y de solo lectura: fingerprint SQL, canario XSS, lectura LFI, `id`/`whoami` para RCE, `7*7` para SSTI, metadata cloud/loopback para SSRF y redirección canario para open redirect.
+
+`ExploitationService` delega la ejecución en `exploit/runners.py`:
+
+| Backend | Ejecución | Aislamiento |
+|---|---|---|
+| `docker` | `docker run --rm -i ...` desde el panel nativo | Hijo efímero, `/tmp` tmpfs, usuario 10002, sin volúmenes ni socket |
+| `runner` | `POST http://exploit-runner:8090/run` | El controlador lanza el mismo hijo efímero; único con socket |
+| `local` | En proceso | Solo desarrollo; no aísla |
+
+El contenedor hijo recibe un JSON compacto por `stdin` (módulo, endpoint, finding y opciones), ejecuta `exploit/container_runner.py` y escribe un único JSON por `stdout` con `success`, `output`, `error`, `evidence`, `trace`, `credentials` y `access`. No tiene base de datos, token, volumen ni socket. `exploit/artifacts.py` extrae únicamente esos artefactos; el panel los guarda en la evidencia y los muestra en la ficha de la ejecución.
+
+`exploit/runner_api.py` es el controlador del stack Compose. Valida el token y el módulo, y lanza un contenedor de un solo uso con `--read-only`, `--cap-drop ALL`, `no-new-privileges`, CPU/memoria/PIDs limitados y sin volúmenes.
 
 ## Herramientas reales
 
@@ -129,9 +141,11 @@ objetivo y ejecuta sin shell. Devuelve salida, código de retorno, duración y
 estado de truncado; la clasificación de evidencia se hace en el panel
 (`tools/base.py`) para que los tres backends apliquen las mismas reglas.
 
-El stack `docker compose` levanta panel + tools-runner. El panel no tiene Docker
-CLI ni monta `/var/run/docker.sock`; el runner no publica puertos y corre con
-rootfs de solo lectura excepto `/work` y `/tmp` (tmpfs).
+El stack `docker compose` levanta `panel`, `tools-runner` y `exploit-runner`. El
+panel no tiene Docker CLI ni monta `/var/run/docker.sock`; el `tools-runner` no
+publica puertos y corre con rootfs de solo lectura excepto `/work` y `/tmp`
+(tmpfs). El `exploit-runner` es el único con el socket, solo lanza contenedores
+hijos efímeros y no ejecuta el módulo en su propio proceso.
 
 Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hydra.
 

@@ -79,6 +79,18 @@ class ExploitationSettings(BaseModel):
     auto_cleanup: bool = True
     log_all_actions: bool = True
     default_listener_port: int = 4444
+    backend: Literal["docker", "runner", "local"] = "docker"
+    docker_image: str = "ghcr.io/shakethec0de/marlonthebug-exploit:latest"
+    runner_url: str = "http://exploit-runner:8090"
+    runner_token: str = ""
+    timeout: int = 150
+    network: str = "bridge"
+    memory: str = "512m"
+    cpus: float = 1.0
+    pids_limit: int = 128
+    run_as_user: str = "10002:10002"
+    rewrite_localhost: bool = True
+    max_export_bytes: int = 512000
 
 
 class PanelSettings(BaseModel):
@@ -223,6 +235,37 @@ def _env_overrides() -> dict[str, Any]:
         tools["rewrite_localhost"] = _env_flag("MTB_TOOLS_REWRITE_LOCALHOST")
     if tools:
         overrides["tools"] = tools
+
+    exploit: dict[str, Any] = {}
+    if value := os.environ.get("MTB_EXPLOIT_BACKEND"):
+        normalized = value.strip().lower()
+        if normalized in {"docker", "runner", "local"}:
+            exploit["backend"] = normalized
+    if value := os.environ.get("MTB_EXPLOIT_URL"):
+        exploit["runner_url"] = value
+    if value := os.environ.get("MTB_EXPLOIT_TOKEN"):
+        exploit["runner_token"] = value
+    if value := os.environ.get("MTB_EXPLOIT_IMAGE"):
+        exploit["docker_image"] = value
+    if value := os.environ.get("MTB_EXPLOIT_TIMEOUT"):
+        with contextlib.suppress(ValueError):
+            exploit["timeout"] = max(30, min(600, int(value)))
+    if value := os.environ.get("MTB_EXPLOIT_NETWORK"):
+        exploit["network"] = value
+    if value := os.environ.get("MTB_EXPLOIT_MEMORY"):
+        exploit["memory"] = value
+    if value := os.environ.get("MTB_EXPLOIT_CPUS"):
+        with contextlib.suppress(ValueError):
+            exploit["cpus"] = max(0.1, min(8.0, float(value)))
+    if value := os.environ.get("MTB_EXPLOIT_PIDS_LIMIT"):
+        with contextlib.suppress(ValueError):
+            exploit["pids_limit"] = max(16, min(1024, int(value)))
+    if value := os.environ.get("MTB_EXPLOIT_RUN_AS_USER"):
+        exploit["run_as_user"] = value
+    if "MTB_EXPLOIT_REWRITE_LOCALHOST" in os.environ:
+        exploit["rewrite_localhost"] = _env_flag("MTB_EXPLOIT_REWRITE_LOCALHOST")
+    if exploit:
+        overrides["exploitation"] = exploit
     return overrides
 
 

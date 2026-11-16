@@ -29,20 +29,32 @@ if [ "$(uname -s)" = "Linux" ]; then
   rm -f .env.bak
 fi
 
-existing_token="$(grep -E '^MTB_TOOLS_TOKEN=' .env | cut -d= -f2- || true)"
-if [ -z "${existing_token}" ]; then
+generate_token() {
   if command -v openssl >/dev/null 2>&1; then
-    token="$(openssl rand -hex 32)"
+    openssl rand -hex 32
   elif command -v python3 >/dev/null 2>&1; then
-    token="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+    python3 -c 'import secrets; print(secrets.token_hex(32))'
   else
-    echo "Error: necesitas openssl o python3 para generar el token." >&2
+    echo "Error: necesitas openssl o python3 para generar tokens." >&2
     exit 1
   fi
-  sed -i.bak "s/^MTB_TOOLS_TOKEN=.*/MTB_TOOLS_TOKEN=${token}/" .env
-  rm -f .env.bak
-  echo "Token de tools-runner generado."
-fi
+}
+
+ensure_token() {
+  local key="$1"
+  local existing
+  existing="$(grep -E "^${key}=" .env | cut -d= -f2- || true)"
+  if [ -z "${existing}" ]; then
+    local token
+    token="$(generate_token)"
+    sed -i.bak "s/^${key}=.*/${key}=${token}/" .env
+    rm -f .env.bak
+    echo "Token ${key} generado."
+  fi
+}
+
+ensure_token MTB_TOOLS_TOKEN
+ensure_token MTB_EXPLOIT_TOKEN
 chmod 600 .env
 
 set -a
@@ -58,7 +70,7 @@ if [ "$(uname -s)" = "Linux" ]; then
 fi
 
 echo "Descargando imágenes (si están publicadas) o construyendo localmente…"
-if ! docker compose pull panel tools-runner 2>/dev/null; then
+if ! docker compose pull panel tools-runner exploit-runner 2>/dev/null; then
   echo "No se pudieron descargar las imágenes; construyendo desde el código…"
   docker compose build
 fi

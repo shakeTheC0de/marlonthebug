@@ -12,9 +12,9 @@
 | 5. Inteligencia | ✅ | CISA KEV, EPSS, NVD, OSV, CPE/versiones, caché local, frescura de feeds y bundles firmados Ed25519 |
 | 6. Módulos modernos | ✅ | JWT, OAuth, BOLA/IDOR, mass assignment, GraphQL, prototype pollution, cache poisoning, supply chain, cloud dashboards, CI/CD, LLM |
 | 7. Portabilidad | ✅ | `--portable`, datos fuera del repo, Docker, PyInstaller en CI, README |
-| 8. Explotación controlada | ✅ | SQLi, XSS, LFI, RCE, SSTI, SSRF, open redirect; confirmación tipada, evidencia y audit log |
+| 8. Explotación controlada | ✅ | SQLi, XSS, LFI, RCE, SSTI, SSRF, open redirect; contenedor efímero, confirmación tipada, evidencia, credenciales/accesos y audit log |
 | 9. Herramientas Docker | ✅ | Imagen Kali con sqlmap, nuclei, commix, whatweb, nikto, nmap; ejecución aislada y conectada al panel |
-| 10. Stack portable | ✅ | `docker compose` panel + tools-runner, sin socket, backends remote/docker/local, token y red interna |
+| 10. Stack portable | ✅ | `docker compose` panel + tools-runner + exploit-runner, sin socket en el panel, backends remote/docker/local, tokens y red interna |
 | 11. Operación | ✅ | `marlonthebug backup`/`restore`, scripts de backup/instalación, imágenes GHCR multiarquitectura |
 
 ## Principios

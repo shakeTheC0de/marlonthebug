@@ -53,6 +53,18 @@ exploitation:
   auto_cleanup: true
   log_all_actions: true
   default_listener_port: 4444
+  backend: "docker"
+  docker_image: "ghcr.io/shakethec0de/marlonthebug-exploit:latest"
+  runner_url: "http://exploit-runner:8090"
+  runner_token: ""
+  timeout: 150
+  network: "bridge"
+  memory: "512m"
+  cpus: 1.0
+  pids_limit: 128
+  run_as_user: "10002:10002"
+  rewrite_localhost: true
+  max_export_bytes: 512000
 
 panel:
   host: "127.0.0.1"

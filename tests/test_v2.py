@@ -380,6 +380,7 @@ async def test_exploitation_requires_workspace_flag(app_paths: AppPaths) -> None
     database, repo = await _database(app_paths)
     try:
         settings = load_settings(app_paths)
+        settings.exploitation.backend = "local"
         workspace = await repo.create_workspace("exploit-blocked", allow_exploitation=False)
         target = await repo.add_target(workspace.id, "example.com")
         finding, _ = await repo.upsert_finding(

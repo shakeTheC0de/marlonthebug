@@ -9,7 +9,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -99,7 +99,7 @@ class AsyncHTTPClient:
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(self.timeout),
                 verify=self.verify_ssl,
-                follow_redirects=self.follow_redirects,
+                follow_redirects=False,
                 max_redirects=self.max_redirects,
                 headers={"User-Agent": self.random_user_agent(), **self._headers},
                 cookies=self._cookies,
@@ -138,7 +138,41 @@ class AsyncHTTPClient:
             trace = get_trace()
             trace_step = trace.start_request(method, url, kwargs) if trace else None
             try:
-                response = await client.request(method, url, **kwargs)
+                current_url = url
+                current_method = method
+                current_kwargs = dict(kwargs)
+                redirect_chain: list[str] = []
+                response = None
+                for _ in range(self.max_redirects + 1):
+                    # Validate every hop before sending it. This keeps redirects
+                    # from escaping the authorized scope.
+                    self._check_scope(current_url)
+                    response = await client.request(
+                        current_method,
+                        current_url,
+                        **{**current_kwargs, "follow_redirects": False},
+                    )
+                    if not (self.follow_redirects and response.is_redirect):
+                        break
+                    location = response.headers.get("location")
+                    if not location:
+                        break
+                    next_url = urljoin(current_url, location)
+                    self._check_scope(next_url)
+                    redirect_chain.append(str(response.url))
+                    if response.status_code == 303 or (
+                        response.status_code in (301, 302) and current_method not in ("GET", "HEAD")
+                    ):
+                        current_method = "GET"
+                        current_kwargs = {
+                            key: value
+                            for key, value in current_kwargs.items()
+                            if key not in ("json", "data", "content", "files")
+                        }
+                    current_url = next_url
+                else:
+                    raise RuntimeError(f"Demasiadas redirecciones para {url}")
+                assert response is not None
                 elapsed = time.monotonic() - started
                 body = response.text
                 match = _TITLE_RE.search(body)
@@ -150,14 +184,14 @@ class AsyncHTTPClient:
                     content_length=len(response.content),
                     elapsed=elapsed,
                     url=str(response.url),
-                    redirect_chain=[str(item.url) for item in response.history],
+                    redirect_chain=redirect_chain,
                     title=title,
                 )
                 if trace and trace_step is not None:
                     trace.finish_request(trace_step, result, elapsed)
                 if self._context:
                     await self._context.record(
-                        method, str(response.url), result.status_code, result.content_length, elapsed
+                        current_method, str(response.url), result.status_code, result.content_length, elapsed
                     )
                 return result
             except (httpx.TimeoutException, httpx.ConnectError, httpx.RemoteProtocolError) as exc:

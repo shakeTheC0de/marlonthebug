@@ -98,6 +98,10 @@ def extract_highlights(evidence: dict[str, Any]) -> list[str]:
         value = evidence.get(key)
         if value not in (None, "", [], {}):
             highlights.append(f"{key}: {str(value)[:400]}")
+    if credentials := evidence.get("credentials"):
+        highlights.append(f"credenciales obtenidas: {len(credentials)}")
+    if access := evidence.get("access"):
+        highlights.append(f"accesos obtenidos: {len(access)}")
     return highlights[:15]
 
 
@@ -212,18 +216,70 @@ def to_markdown(run: Any) -> str:
         str(run.output or run.error or "Sin salida")[:5000],
         "```",
         "",
-        "## 5. Impacto y remediación",
+    ]
+    credentials = evidence.get("credentials", [])
+    access = evidence.get("access", [])
+    if credentials or access:
+        lines += [
+            "## 5. Credenciales y accesos obtenidos",
+            "",
+            "> Material sensible. El contenedor efímero solo exportó estos artefactos, no su estado.",
+            "",
+        ]
+        if credentials:
+            lines += [
+                "**Credenciales y secretos:**",
+                "",
+                "| Tipo | Usuario | Secreto | Host | Módulo |",
+                "|---|---|---|---|---|",
+            ]
+            for item in credentials:
+                lines.append(
+                    "| {type} | {username} | {secret} | {host} | {module} |".format(
+                        type=_cell(item.get("type", "")),
+                        username=_cell(item.get("username", "")),
+                        secret=_cell(item.get("password") or item.get("value") or ""),
+                        host=_cell(item.get("host") or item.get("target") or ""),
+                        module=_cell(item.get("module", "")),
+                    )
+                )
+            lines.append("")
+        if access:
+            lines += [
+                "**Accesos:**",
+                "",
+                "| Tipo | Objetivo | Detalle |",
+                "|---|---|---|",
+            ]
+            for item in access:
+                lines.append(
+                    "| {type} | {target} | {detail} |".format(
+                        type=_cell(item.get("type", "")),
+                        target=_cell(item.get("target") or item.get("url") or item.get("via") or ""),
+                        detail=_cell(
+                            item.get("detail")
+                            or item.get("username")
+                            or item.get("database")
+                            or item.get("command")
+                            or item.get("payload")
+                            or ""
+                        ),
+                    )
+                )
+            lines.append("")
+    lines += [
+        "## 6. Impacto y remediación",
         "",
         f"- **Impacto:** {impact.get('description', '—')}",
         f"- **Remediación:** {impact.get('remediation', '—')}",
         "",
-        "## 6. Reproducción",
+        "## 7. Reproducción",
         "",
     ]
     for command in reproduction.get("curl", []):
         lines += ["```bash", command, "```", ""]
     lines += [
-        "## 7. Integridad",
+        "## 8. Integridad",
         "",
         f"- **Algoritmo:** {integrity.get('algorithm', 'sha256')}",
         f"- **Hash:** `{integrity.get('hash', '—')}`",
@@ -233,6 +289,10 @@ def to_markdown(run: Any) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def _cell(value: Any) -> str:
+    return str(value or "").replace("|", "\\|").replace("\n", " ")[:300]
 
 
 def _fmt(value: Any) -> str:

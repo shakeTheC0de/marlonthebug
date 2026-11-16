@@ -104,7 +104,9 @@ La explotación se habilita por proyecto. En **Proyectos → Alcance**, activa *
 3. Escribe `EXPLOTAR` y ejecuta.
 4. Revisa la evidencia en la pantalla de la ejecución.
 
-Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de ficheros de prueba, RCE con `id`/`whoami`, SSTI aritmético, SSRF a metadata/loopback y open redirect canario. No hay shells inversas ni persistencia por defecto. Cada ejecución guarda la traza de peticiones/respuestas, la justificación, los comandos de reproducción y un hash SHA-256. Puedes descargar la evidencia en Markdown o JSON desde la pantalla de la ejecución.
+Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de ficheros de prueba, RCE con `id`/`whoami`, SSTI aritmético, SSRF a metadata/loopback y open redirect canario. No hay shells inversas ni persistencia por defecto. Cada módulo corre en un **contenedor efímero** sin base de datos, volúmenes ni socket; al terminar se elimina y solo devuelve resultado, credenciales/passwords y accesos. La ejecución guarda la traza de peticiones/respuestas, la justificación, los comandos de reproducción y un hash SHA-256. Puedes descargar la evidencia en Markdown o JSON desde la pantalla de la ejecución; la sección **Credenciales y accesos obtenidos** contiene el material sensible exportado.
+
+En el stack Compose el backend es `runner` y el panel delega en `exploit-runner`. En una instalación nativa usa `docker`; solo `local` ejecuta en el proceso del panel y está pensado para desarrollo. Si el backend no está disponible, el panel lo indica y no ejecuta nada.
 
 En el formulario de análisis, **Seleccionar todos** marca todos los módulos; **Limpiar** los desmarca.
 

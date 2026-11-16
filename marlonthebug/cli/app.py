@@ -695,6 +695,52 @@ async def _exploit_run(
         await database.close()
 
 
+@exploit_app.command("status")
+def exploit_status(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
+    """Muestra el backend de explotación aislada."""
+    from marlonthebug.services.exploitation import ExploitationService
+
+    async def run() -> None:
+        paths = _paths(data_dir)
+        settings = load_settings(paths)
+        service = ExploitationService(None, settings, paths)  # type: ignore[arg-type]
+        console.print(await service.status())
+
+    asyncio.run(run())
+
+
+@exploit_app.command("build")
+def exploit_build(
+    image: str | None = typer.Option(None, "--image", help="Imagen a construir"),
+    data_dir: str | None = typer.Option(None, "--data-dir"),
+) -> None:
+    """Construye la imagen del contenedor efímero de explotación."""
+    import subprocess
+
+    paths = _paths(data_dir)
+    settings = load_settings(paths)
+    if image:
+        settings.exploitation.docker_image = image
+    context = Path(__file__).resolve().parents[2]
+    command = [
+        "docker",
+        "build",
+        "-f",
+        str(context / "Dockerfile.exploit"),
+        "-t",
+        settings.exploitation.docker_image,
+        str(context),
+    ]
+    console.print(f"[*] Construyendo {settings.exploitation.docker_image}…")
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    console.print((result.stdout or "") + (result.stderr or ""))
+    if result.returncode == 0:
+        console.print(f"[green]Imagen de explotación lista:[/green] {settings.exploitation.docker_image}")
+    else:
+        console.print(f"[red]La construcción falló con código {result.returncode}[/red]")
+        raise typer.Exit(result.returncode)
+
+
 @tools_app.command("status")
 def tools_status(data_dir: str | None = typer.Option(None, "--data-dir")) -> None:
     """Muestra el estado del backend de herramientas."""

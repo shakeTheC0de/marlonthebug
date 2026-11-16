@@ -365,28 +365,42 @@ def test_restore_rejects_path_traversal(app_paths: AppPaths, tmp_path: Path) -> 
     assert not (tmp_path / "evil.txt").exists()
 
 
-def test_compose_stack_is_socketless_and_local_only() -> None:
+def test_compose_stack_isolates_the_panel_and_exploits() -> None:
     compose_text = Path("docker-compose.yml").read_text(encoding="utf-8")
     compose = yaml.safe_load(compose_text)
-    assert set(compose["services"]) == {"panel", "tools-runner"}
+    assert set(compose["services"]) == {"panel", "tools-runner", "exploit-runner"}
     panel = compose["services"]["panel"]
-    runner = compose["services"]["tools-runner"]
+    tools = compose["services"]["tools-runner"]
+    exploit = compose["services"]["exploit-runner"]
     assert str(panel["ports"][0]).startswith("127.0.0.1:")
-    assert "ports" not in runner
-    assert runner["expose"] == ["8080"]
-    assert "/var/run/docker.sock" not in compose_text
+    assert "ports" not in tools
+    assert tools["expose"] == ["8080"]
+    assert "ports" not in exploit
+    assert exploit["expose"] == ["8090"]
+    panel_volumes = panel.get("volumes") or []
+    assert not any("/var/run/docker.sock" in str(item) for item in panel_volumes)
+    assert any("/var/run/docker.sock" in str(item) for item in exploit.get("volumes") or [])
     assert panel["read_only"] is True
-    assert runner["read_only"] is True
+    assert tools["read_only"] is True
+    assert exploit["read_only"] is True
     assert panel["cap_drop"] == ["ALL"]
-    assert runner["cap_drop"] == ["ALL"]
+    assert tools["cap_drop"] == ["ALL"]
+    assert exploit["cap_drop"] == ["ALL"]
     assert "no-new-privileges:true" in panel["security_opt"]
-    assert "no-new-privileges:true" in runner["security_opt"]
+    assert "no-new-privileges:true" in tools["security_opt"]
+    assert "no-new-privileges:true" in exploit["security_opt"]
     assert "remote" in str(panel["environment"]["MTB_TOOLS_BACKEND"])
-    assert "MTB_TOOLS_TOKEN" in runner["environment"]
+    assert "MTB_TOOLS_TOKEN" in tools["environment"]
+    assert "runner" in str(panel["environment"]["MTB_EXPLOIT_BACKEND"])
+    assert "MTB_EXPLOIT_TOKEN" in exploit["environment"]
+    assert exploit["user"] == "0:0"
 
     panel_dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
     tools_dockerfile = Path("Dockerfile.tools").read_text(encoding="utf-8")
+    exploit_dockerfile = Path("Dockerfile.exploit").read_text(encoding="utf-8")
     assert '"--data-dir", "/data"' in panel_dockerfile
     assert "docker.sock" not in panel_dockerfile
     assert "runner_api" in tools_dockerfile
     assert "marlonthebug.tools.runner_api" in tools_dockerfile
+    assert "marlonthebug.exploit.runner_api" in exploit_dockerfile
+    assert "marlonthebug.exploit.container_runner" in exploit_dockerfile

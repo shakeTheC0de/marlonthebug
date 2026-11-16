@@ -102,8 +102,11 @@
     <span class="tag risk-high">Solo sistemas autorizados</span>
   </div>
   {% if exploit_modules %}
-  <p class="muted">Ejecuta una prueba de concepto con evidencia. El hallazgo se marcará como verificado si la explotación se confirma.</p>
-  <form method="post" action="/findings/{{ finding.id }}/exploit" class="stack" data-confirm="¿Ejecutar la explotación controlada contra {{ finding.target_host }}?">
+  <p class="muted">Ejecuta una prueba de concepto con evidencia. El módulo corre en un contenedor efímero sin base de datos, volumen ni socket, y solo devuelve resultados, credenciales y accesos. El hallazgo se marcará como verificado si la explotación se confirma.</p>
+  {% if not exploit_status.available or not exploit_status.image_ready %}
+  <div class="flash flash-err">{{ icon('alert', 18) }} <span>Motor de explotación no disponible ({{ exploit_status.backend }}): {{ exploit_status.reason or 'revisa la configuración' }}</span></div>
+  {% else %}
+  <form method="post" action="/findings/{{ finding.id }}/exploit" class="stack" data-confirm="¿Ejecutar la explotación controlada contra {{ finding.target_host }} en un contenedor efímero?">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-grid-2">
       <label class="field"><span>Módulo</span>
@@ -117,8 +120,9 @@
         <input type="text" name="confirm_text" placeholder="Escribe EXPLOTAR" autocomplete="off" required>
       </label>
     </div>
-    <button class="btn btn-danger" type="submit">{{ icon('zap', 16) }} Ejecutar explotación</button>
+    <button class="btn btn-danger" type="submit">{{ icon('zap', 16) }} Ejecutar en contenedor efímero</button>
   </form>
+  {% endif %}
   {% else %}
     <p class="muted">No hay un módulo de explotación mapeado para este plugin.</p>
   {% endif %}

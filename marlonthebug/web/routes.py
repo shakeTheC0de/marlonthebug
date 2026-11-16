@@ -572,6 +572,7 @@ async def finding_detail(request: Request, finding_id: str):
     exploit_runs = await repo.list_exploit_runs(finding_id=finding.id, limit=10)
     tool_modules = get_tools(request).available_tools(finding)
     docker_status = await get_tools(request).status() if tool_modules else {"available": False}
+    exploit_status = await get_exploitation(request).status()
     return await render(
         request,
         "finding_detail.html",
@@ -583,6 +584,7 @@ async def finding_detail(request: Request, finding_id: str):
         exploit_runs=exploit_runs,
         tool_modules=tool_modules,
         docker_status=docker_status,
+        exploit_status=exploit_status,
         allow_exploitation=bool(finding.workspace and finding.workspace.allow_exploitation),
     )
 
@@ -633,6 +635,7 @@ async def exploits_page(request: Request):
     exploitable = await get_exploitation(request).list_exploitable(workspace_id) if workspace_id else []
     runs = await repo.list_exploit_runs(workspace_id, limit=50)
     docker_status = await get_tools(request).status()
+    exploit_status = await get_exploitation(request).status()
     return await render(
         request,
         "exploits.html",
@@ -641,7 +644,9 @@ async def exploits_page(request: Request):
         exploitable=exploitable,
         runs=runs,
         docker_status=docker_status,
+        exploit_status=exploit_status,
         tool_image=get_settings(request).tools.docker_image,
+        exploit_image=get_settings(request).exploitation.docker_image,
     )
 
 
@@ -1054,6 +1059,7 @@ async def settings_page(request: Request):
     feeds = await repo.list_feeds()
     plugin_count = sum(len(items) for items in plugin_groups(request).values())
     docker_status = await get_tools(request).status()
+    exploit_status = await get_exploitation(request).status()
     return await render(
         request,
         "settings.html",
@@ -1064,6 +1070,7 @@ async def settings_page(request: Request):
         feeds=feeds,
         plugin_count=plugin_count,
         docker_status=docker_status,
+        exploit_status=exploit_status,
     )
 
 
@@ -1101,8 +1108,20 @@ async def update_settings(request: Request):
         settings.tools.remote_token = remote_token
     with contextlib.suppress(ValueError):
         settings.tools.timeout = max(30, min(900, int(form.get("tool_timeout", 180))))
+    exploit_backend = str(form.get("exploit_backend", settings.exploitation.backend)).strip().lower()
+    if exploit_backend in {"docker", "runner", "local"}:
+        settings.exploitation.backend = exploit_backend
+    settings.exploitation.docker_image = str(form.get("exploit_image", settings.exploitation.docker_image)).strip()
+    settings.exploitation.runner_url = str(form.get("exploit_runner_url", settings.exploitation.runner_url)).strip()
+    exploit_token = str(form.get("exploit_runner_token", "")).strip()
+    if exploit_token:
+        settings.exploitation.runner_token = exploit_token
+    with contextlib.suppress(ValueError):
+        settings.exploitation.timeout = max(30, min(600, int(form.get("exploit_timeout", 150))))
+    settings.exploitation.rewrite_localhost = bool(form.get("exploit_rewrite_localhost"))
     save_settings(settings, get_paths(request))
     get_tools(request).configure(settings)
+    get_exploitation(request).configure(settings)
     await get_repo(request).log_action("settings.update", detail={"by": "panel"})
     return redirect_with("/settings", ok="Configuración guardada")
 

@@ -75,6 +75,35 @@
           {% endif %}
         </p>
       </div>
+      <h3 class="section-title">Explotación aislada</h3>
+      <div class="form-grid-2">
+        <label class="field"><span>Backend de explotación</span>
+          <select name="exploit_backend">
+            <option value="runner" {% if settings.exploitation.backend == 'runner' %}selected{% endif %}>runner · contenedor efímero (Compose)</option>
+            <option value="docker" {% if settings.exploitation.backend == 'docker' %}selected{% endif %}>docker · contenedor efímero (Docker local)</option>
+            <option value="local" {% if settings.exploitation.backend == 'local' %}selected{% endif %}>local · en proceso (solo desarrollo)</option>
+          </select>
+        </label>
+        <label class="field"><span>Timeout de explotación (s)</span><input type="number" name="exploit_timeout" min="30" max="600" value="{{ settings.exploitation.timeout }}"></label>
+      </div>
+      <div class="form-grid-2">
+        <label class="field"><span>URL del exploit-runner</span><input type="text" name="exploit_runner_url" value="{{ settings.exploitation.runner_url }}"></label>
+        <label class="field"><span>Token del exploit-runner</span><input type="password" name="exploit_runner_token" value="" placeholder="{% if settings.exploitation.runner_token %}configurado · deja vacío para conservar{% else %}sin token{% endif %}" autocomplete="new-password"></label>
+      </div>
+      <label class="field"><span>Imagen del contenedor de explotación</span><input type="text" name="exploit_image" value="{{ settings.exploitation.docker_image }}"></label>
+      <label class="check"><input type="checkbox" name="exploit_rewrite_localhost" {% if settings.exploitation.rewrite_localhost %}checked{% endif %}><span>Reescribir localhost a host.docker.internal para el contenedor</span></label>
+      <div class="notice">
+        <strong>Explotación {{ exploit_status.backend or settings.exploitation.backend }}</strong>
+        <p>
+          {% if exploit_status.available and exploit_status.image_ready %}
+          Contenedor efímero disponible. Solo se exportan resultado, credenciales y accesos.
+          {% elif exploit_status.available %}
+          Backend disponible, pero falta preparar la imagen o el runner.
+          {% else %}
+          No disponible: {{ exploit_status.reason or 'revisa la configuración y los logs' }}.
+          {% endif %}
+        </p>
+      </div>
       <button class="btn btn-primary" type="submit">{{ icon('check', 16) }} Guardar configuración</button>
     </form>
   </section>

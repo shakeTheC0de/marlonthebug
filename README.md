@@ -18,6 +18,7 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 - **Persistencia SQLite** con deduplicación de hallazgos e histórico por proyecto.
 - **Informes** ejecutivos y técnicos en PDF, HTML, Markdown y JSON, en español e inglés.
 - **Explotación controlada** con evidencia: SQLi de solo lectura, XSS canario, LFI, RCE de prueba (`id`/`whoami`), SSTI, SSRF y open redirect. Sin shells inversas ni persistencia por defecto.
+- **Explotación en contenedores efímeros**: un contenedor por intento, sin datos ni socket, que solo exporta resultado, credenciales/passwords y accesos.
 - **Inteligencia de vulnerabilidades**: CISA KEV, EPSS, NVD y OSV con caché local y bundles para entornos air-gapped.
 - **Stack Docker portable**: panel + tools-runner Kali aislado, sin socket de Docker, con backup y restauración.
 - **Modo portable**: todos los datos en `./data`, ideal para USB.
@@ -76,8 +77,9 @@ cd marlonthebug
 ./scripts/install.sh
 ```
 
-El stack levanta el **panel** y un **tools-runner** Kali aislado, sin Docker CLI
-ni socket dentro del panel. Los datos quedan en `./mtb-data` y el panel escucha
+El stack levanta el **panel**, un **tools-runner** Kali aislado y un
+**exploit-runner** que lanza contenedores efímeros de explotación. El panel no
+tiene Docker CLI ni socket. Los datos quedan en `./mtb-data` y el panel escucha
 solo en `127.0.0.1:8765`. Guía completa: [`docs/DOCKER.md`](docs/DOCKER.md).
 
 ```bash
@@ -128,6 +130,8 @@ marlonthebug intel export --output intel-bundle.json
 marlonthebug legacy import --reports reports
 marlonthebug exploit list --workspace acme-audit
 marlonthebug exploit run --finding <id> --module webapp/xss_exploit --confirm-text EXPLOTAR
+marlonthebug exploit status
+marlonthebug exploit build   # imagen del contenedor efímero de explotación
 marlonthebug tools status
 marlonthebug tools run --finding <id> --tool sqlmap --confirm-text EXPLOTAR
 marlonthebug backup --output ~/backups/acme-audit.tar.gz
@@ -185,6 +189,9 @@ MTB_TOOLS_BACKEND=remote
 MTB_TOOLS_URL=http://tools-runner:8080
 MTB_TOOLS_TOKEN=...
 MTB_TOOLS_TIMEOUT=180
+MTB_EXPLOIT_BACKEND=runner
+MTB_EXPLOIT_URL=http://exploit-runner:8090
+MTB_EXPLOIT_TOKEN=...
 ```
 
 ---
@@ -192,6 +199,8 @@ MTB_TOOLS_TIMEOUT=180
 ## Explotación controlada
 
 La explotación no se ejecuta durante el escaneo. Se habilita por proyecto y requiere escribir `EXPLOTAR` en el panel (o pasar `--confirm-text EXPLOTAR` en CLI).
+
+Cada módulo se ejecuta en un **contenedor efímero** de la imagen de explotación: sin base de datos, sin volúmenes, sin socket de Docker y con `cap_drop: ALL`, rootfs de solo lectura, tmpfs `/tmp` y límites de CPU/memoria/PIDs. El contenedor recibe un JSON por `stdin` y devuelve únicamente un JSON por `stdout` con **resultado, credenciales/passwords y accesos obtenidos**. No exporta su sistema de ficheros ni estado.
 
 | Módulo | Prueba de concepto | Riesgo |
 |---|---|---|
@@ -203,7 +212,9 @@ La explotación no se ejecuta durante el escaneo. Se habilita por proyecto y req
 | `webapp/ssrf_exploit` | Metadata cloud y loopback | Alto |
 | `webapp/open_redirect_exploit` | Redirección a destino canario | Bajo |
 
-Cada ejecución se guarda en `exploit_runs` con payload, salida, evidencia, operador y estado de limpieza. Además se registra un **traza paso a paso** de cada petición y respuesta, una justificación del hallazgo, comandos de reproducción y un hash SHA-256 de integridad. La evidencia se puede descargar en Markdown o JSON y aparece también en los informes. Si la prueba se confirma, el hallazgo pasa a **verificado** y **confirmado**.
+Cada ejecución se guarda en `exploit_runs` con payload, salida, evidencia, operador y estado de limpieza. Además se registra una **traza paso a paso** de cada petición y respuesta, una justificación del hallazgo, comandos de reproducción y un hash SHA-256 de integridad. La evidencia incluye las **credenciales, contraseñas, hashes, tokens y accesos** que el contenedor haya demostrado, y se puede descargar en Markdown o JSON. Si la prueba se confirma, el hallazgo pasa a **verificado** y **confirmado**.
+
+En el stack Compose el panel delega el lanzamiento en `exploit-runner`, el único servicio con socket de Docker; los hijos no tienen socket ni acceso a los datos. En una instalación nativa, el backend `docker` usa el Docker local. `local` queda reservado para desarrollo.
 
 Solo debes usar estos módulos contra sistemas propios o con autorización escrita.
 
@@ -362,7 +373,7 @@ marlonthebug/
 ├── collaborator/   OOB DNS/HTTP
 ├── listeners/      listeners de reverse connections
 ├── tools/          catálogo, backends docker/remote/local y runner API
-└── exploit/        módulos de explotación controlada
+└── exploit/        módulos, runners y contenedor efímero de explotación
 ```
 
 ---
