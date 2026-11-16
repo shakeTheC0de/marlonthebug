@@ -124,6 +124,8 @@ El contenedor hijo recibe un JSON compacto por `stdin` (módulo, endpoint, findi
 
 `exploit/runner_api.py` es el controlador del stack Compose. Valida el token y el módulo, y lanza un contenedor de un solo uso con `--read-only`, `--cap-drop ALL`, `no-new-privileges`, CPU/memoria/PIDs limitados y sin volúmenes.
 
+`services/playbooks.py` cubre los hallazgos sin módulo automático con una validación guiada: pasos, herramientas y límites. Distingue plugins que ya hicieron pruebas activas (`auth_bypass`, `jwt`), validaciones manuales de alto riesgo (smuggling, deserialización, race conditions) y hallazgos informativos. Los módulos LFI/RCE añaden post-explotación de solo lectura para demostrar acceso y extraer configuración, sin persistencia ni escalada.
+
 ## Herramientas reales
 
 `ToolService` valida `allow_exploitation`, confirmación tipada, scope y mapeo

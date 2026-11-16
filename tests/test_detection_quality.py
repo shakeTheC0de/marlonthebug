@@ -77,3 +77,21 @@ def test_generic_forbidden_paths_are_not_reported() -> None:
     assert is_interesting_forbidden(".git/HEAD") is True
     assert is_interesting_forbidden("cgi-bin") is False
     assert is_interesting_forbidden(".htaccess") is False
+
+
+def test_guided_playbooks_cover_findings_without_modules() -> None:
+    from marlonthebug.services.playbooks import playbook_for
+
+    assert playbook_for("openapi")["kind"] == "guided"
+    assert playbook_for("auth_bypass")["kind"] == "self_tested"
+    assert playbook_for("request_smuggling")["kind"] == "manual"
+    assert playbook_for("unknown-plugin") is None
+
+
+def test_rce_post_exploitation_replaces_only_the_command() -> None:
+    from marlonthebug.exploit.webapp.rce_exploit import _replace_command
+
+    assert _replace_command("; id", "hostname") == "; hostname"
+    assert _replace_command("| id", "uname -a") == "| uname -a"
+    assert _replace_command("$(id)", "hostname") == "$(hostname)"
+    assert _replace_command("`id`", "hostname") == "`hostname`"

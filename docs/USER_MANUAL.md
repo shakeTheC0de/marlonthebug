@@ -108,6 +108,8 @@ Los módulos son pruebas de concepto: SQLi de solo lectura, XSS canario, LFI de 
 
 En el stack Compose el backend es `runner` y el panel delega en `exploit-runner`. En una instalación nativa usa `docker`; solo `local` ejecuta en el proceso del panel y está pensado para desarrollo. Si el backend no está disponible, el panel lo indica y no ejecuta nada.
 
+La ficha del hallazgo indica su **cobertura**: módulo automático, plugin que ya hizo pruebas activas (por ejemplo JWT o auth bypass), validación guiada o hallazgo informativo. En LFI/RCE confirmados se ejecuta post-explotación de solo lectura para leer configuración del host y demostrar acceso, sin persistencia ni escalada.
+
 En el formulario de análisis, **Seleccionar todos** marca todos los módulos; **Limpiar** los desmarca.
 
 ## 9. Herramientas reales

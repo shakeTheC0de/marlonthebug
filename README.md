@@ -216,6 +216,8 @@ Cada ejecución se guarda en `exploit_runs` con payload, salida, evidencia, oper
 
 En el stack Compose el panel delega el lanzamiento en `exploit-runner`, el único servicio con socket de Docker; los hijos no tienen socket ni acceso a los datos. En una instalación nativa, el backend `docker` usa el Docker local. `local` queda reservado para desarrollo.
 
+La ficha de cada hallazgo indica su cobertura: **módulo automático**, **plugin que ya ejecutó pruebas activas**, **validación guiada** o **informativo**. Las validaciones guiadas muestran pasos, herramientas y límites de seguridad; no se ejecutan solas. En LFI/RCE confirmados se añade post-explotación de solo lectura (ficheros de configuración, hostname, kernel, SO) para demostrar acceso sin persistencia ni escalada.
+
 Solo debes usar estos módulos contra sistemas propios o con autorización escrita.
 
 ---

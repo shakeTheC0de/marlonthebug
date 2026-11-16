@@ -123,8 +123,33 @@
     <button class="btn btn-danger" type="submit">{{ icon('zap', 16) }} Ejecutar en contenedor efímero</button>
   </form>
   {% endif %}
+  {% elif exploit_playbook %}
+  <div class="toolbar" style="margin-bottom:10px">
+    <div class="toolbar-info">
+      <span class="tag risk-{{ exploit_playbook.get('risk', 'medium') }}">Riesgo {{ exploit_playbook.get('risk', 'medium') }}</span>
+      <span class="pill">{{ exploit_playbook.get('kind', 'guided') }}</span>
+    </div>
+  </div>
+  <h3 class="section-title">{{ exploit_playbook.get('title', 'Validación guiada') }}</h3>
+  <p class="muted">{{ exploit_playbook.get('summary', '') }}</p>
+  <ol class="playbook-steps">
+    {% for step in exploit_playbook.get('steps', []) %}
+    <li>{{ step }}</li>
+    {% endfor %}
+  </ol>
+  {% if exploit_playbook.get('tools') %}
+  <p class="muted small">Herramientas sugeridas:
+    {% for tool in exploit_playbook.get('tools', []) %}<code>{{ tool }}</code>{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  {% if exploit_playbook.get('notes') %}
+  <div class="callout-box">
+    <div class="callout-icon">{{ icon('shield', 20) }}</div>
+    <div><strong>Límite de seguridad</strong><p>{{ exploit_playbook.get('notes') }}</p></div>
+  </div>
+  {% endif %}
   {% else %}
-    <p class="muted">No hay un módulo de explotación mapeado para este plugin.</p>
+    <p class="muted">Este hallazgo es informativo: no existe una explotación directa segura. Revisa la evidencia y aplica la remediación; no se lanzará ninguna prueba activa.</p>
   {% endif %}
 </section>
 

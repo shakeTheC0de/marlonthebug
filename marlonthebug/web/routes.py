@@ -569,6 +569,7 @@ async def finding_detail(request: Request, finding_id: str):
     if not finding:
         raise HTTPException(404, "Hallazgo no encontrado")
     modules = await get_exploitation(request).available_modules(finding)
+    exploit_playbook = get_exploitation(request).playbook_for(finding.plugin_name)
     exploit_runs = await repo.list_exploit_runs(finding_id=finding.id, limit=10)
     tool_modules = get_tools(request).available_tools(finding)
     docker_status = await get_tools(request).status() if tool_modules else {"available": False}
@@ -581,6 +582,7 @@ async def finding_detail(request: Request, finding_id: str):
         finding=finding,
         statuses_available=STATUSES,
         exploit_modules=modules,
+        exploit_playbook=exploit_playbook,
         exploit_runs=exploit_runs,
         tool_modules=tool_modules,
         docker_status=docker_status,
