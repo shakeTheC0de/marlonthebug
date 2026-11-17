@@ -1,0 +1,20 @@
+#!/bin/sh
+# Open the MarlonTheBug panel with a token in a minimal Chromium window.
+set -eu
+
+DATA_DIR="${HOME}/.local/share/MarlonTheBug"
+URL="http://127.0.0.1:8765/"
+
+for _ in $(seq 1 90); do
+  if [ -s "${DATA_DIR}/panel.token" ]; then
+    TOKEN="$(cat "${DATA_DIR}/panel.token" 2>/dev/null || true)"
+    [ -n "${TOKEN}" ] && URL="http://127.0.0.1:8765/?token=${TOKEN}"
+    break
+  fi
+  sleep 1
+done
+
+exec chromium \
+  --no-first-run \
+  --disable-features=Translate,MediaRouter \
+  --app="${URL}"

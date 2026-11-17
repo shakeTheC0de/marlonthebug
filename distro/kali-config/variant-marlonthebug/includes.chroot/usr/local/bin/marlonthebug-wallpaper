@@ -1,0 +1,9 @@
+#!/bin/sh
+# Apply the MarlonTheBug wallpaper on first login.
+set -eu
+[ -n "${DISPLAY:-}" ] || exit 0
+command -v xfconf-query >/dev/null 2>&1 || exit 0
+sleep 2
+for prop in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/last-image$' || true); do
+  xfconf-query -c xfce4-desktop -p "${prop}" -s /usr/share/backgrounds/marlonthebug/marlonthebug.svg 2>/dev/null || true
+done

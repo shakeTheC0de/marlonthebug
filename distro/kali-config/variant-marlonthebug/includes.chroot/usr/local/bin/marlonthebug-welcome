@@ -1,0 +1,42 @@
+#!/bin/sh
+# First-login welcome and quick actions for MarlonTheBug Live.
+set -eu
+
+FORCE=0
+[ "${1:-}" = "--force" ] && FORCE=1
+MARKER="${HOME}/.config/marlonthebug/welcome-shown"
+
+if [ "${FORCE}" -eq 0 ] && [ -f "${MARKER}" ]; then
+  exit 0
+fi
+command -v zenity >/dev/null 2>&1 || exit 0
+
+CHOICE="$(zenity --list \
+  --title="MarlonTheBug Live" \
+  --text="Bienvenido. Este es tu entorno de auditoría y trabajo.\n\nElige una acción:" \
+  --column="Acción" \
+  --width=520 --height=360 \
+  "Abrir panel" \
+  "Notas (CherryTree)" \
+  "Navegador" \
+  "Instalar aplicaciones" \
+  "Actualizar sistema" \
+  "Documentación" 2>/dev/null || true)"
+
+[ -n "${CHOICE}" ] || exit 0
+mkdir -p "$(dirname "${MARKER}")"
+touch "${MARKER}"
+
+case "${CHOICE}" in
+  "Abrir panel") exec /usr/local/bin/marlonthebug-live ;;
+  "Notas (CherryTree)") exec cherrytree ;;
+  "Navegador") exec firefox-esr ;;
+  "Instalar aplicaciones") exec synaptic-pkexec ;;
+  "Actualizar sistema")
+    exec xfce4-terminal -e "sudo apt update && sudo apt full-upgrade"
+    ;;
+  "Documentación")
+    zenity --text-info --title="MarlonTheBug" --width=800 --height=600 \
+      --filename=/usr/share/doc/marlonthebug/README.md 2>/dev/null || true
+    ;;
+esac
