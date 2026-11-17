@@ -90,21 +90,34 @@ docker compose logs -f panel  # token y URL
 
 ### MarlonTheBug Live (USB)
 
-La carpeta [`distro/`](distro/README.md) contiene el esqueleto para una ISO
-basada en Kali Live con el panel preinstalado, autostart y persistencia
-opcional. El build se lanza en Linux o con el workflow **Live ISO** de GitHub
+La carpeta [`distro/`](distro/README.md) construye dos imágenes **Arch Linux +
+archiso**:
+
+- `mtb-privacy`: Xfce, Tor-only, amnésica, sin panel ni herramientas ofensivas.
+- `mtb-audit`: Xfce + KDE, panel, herramientas de auditoría y `archinstall`,
+  con red directa y sin promesa de anonimato.
+
+El build se lanza en Arch/Linux o con el workflow **Arch Live ISO** de GitHub
 Actions; macOS no es un host fiable para construir ISOs live.
 
 ```bash
-# En Linux
-./distro/preflight.sh
-./distro/build.sh
+# En Arch Linux
+sudo pacman -S --needed archiso rsync curl
+./distro/archiso/build.sh --profile all
 
-# En CI: Actions → Live ISO → Run workflow (amd64/arm64)
+# En cualquier Linux con Docker/podman
+./distro/archiso/build.sh --profile all --engine docker
+
+# En CI: Actions → Arch Live ISO → Run workflow
 ```
 
-La ISO se graba con Etcher, `dd` o Ventoy. Sin persistencia, todo se pierde al
-apagar; con una partición `persistence` se conservan `/home`, informes y token.
+Las ISOs quedan en `distro/archiso/out/` y se graban con Etcher, `dd` o
+Ventoy. La guía técnica, el modelo de amenazas, las pruebas y los límites están
+en [`distro/archiso/README.md`](distro/archiso/README.md).
+
+El scaffold Kali anterior (`distro/build.sh`, `distro/kali-config/` y el
+workflow `Kali Live ISO (legacy)`) se mantiene como respaldo manual mientras
+maduran los perfiles Arch.
 
 ### Laboratorio de práctica
 

@@ -1,128 +1,165 @@
-# MarlonTheBug Live
+# MarlonTheBug Live images
 
-Imagen Linux tipo Kali, con el panel MarlonTheBug preinstalado y autostart en
-el navegador. Pensada para un USB: arrancar, trabajar y apagar sin instalación.
+This directory builds two USB images with **Arch Linux + archiso**:
 
-## Qué incluye
+| Image | Use | Desktop | Network |
+|---|---|---|---|
+| `mtb-privacy` | Private, amnesic live session | Xfce | Tor-only |
+| `mtb-audit` | Auditing, CPTS and CTF | Xfce + KDE | Direct |
 
-- Kali Linux Xfce con el metapaquete de herramientas y firmware.
-- MarlonTheBug panel + CLI en `/opt/marlonthebug/venv`.
-- Chromium con ventana del panel al iniciar sesión.
-- `metasploit-framework`, `sqlmap`, `nmap`, `nikto`, `whatweb`, `ffuf`,
-  `gobuster`, `nuclei`, `commix`, `hydra`.
-- Escritorio Xfce funcional: Firefox, Chromium, Thunderbird, LibreOffice,
-  VLC, CherryTree, Zim, notas Xfce, KeePassXC, Synaptic, Flatpak, GParted,
-  Timeshift, GUFW, neovim, tmux y htop.
-- Ventana de bienvenida con accesos a panel, notas, navegador, instalación de
-  aplicaciones, actualización y documentación.
-- Fondo de escritorio y menú propios de MarlonTheBug.
-- Backends `local` para herramientas y explotación: todo corre dentro del
-  sistema live, sin Docker. Es un compromiso de portabilidad; para aislamiento
-  por contenedor usa el stack Compose normal.
-- Datos en `/home/kali/.local/share/MarlonTheBug`; si habilitas persistencia en
-  el USB, sobreviven al reinicio.
+The detailed technical guide is in
+[`archiso/README.md`](archiso/README.md). The rest of this file covers building,
+flashing and the security model.
 
-## Requisitos de build
+## Why Arch + archiso
 
-- Linux x86_64 recomendado. La ISO por defecto es `amd64`; también se puede
-  compilar `arm64` con `ARCH=arm64` (más lento y no arranca en un Mac Apple
-  Silicon; esos equipos necesitan virtualización).
-- `git`, `sudo`, `uv` (o `python3-build`), y ~20 GB libres.
-- `live-build` y dependencias de Kali. El modo contenedor las encapsula.
-- **macOS no es un host fiable para construir la ISO**: usa el workflow
-  `.github/workflows/iso.yml` o una VM Linux.
+- You learn the real pieces: pacman, systemd, mkinitcpio, squashfs, overlayfs,
+  UEFI/BIOS boot and a minimal root filesystem.
+- The build is reproducible and small enough to understand.
+- LFS/BLFS is a great course but a poor daily privacy/USB system: keeping it
+  patched and secure by hand is a full-time job. Use an LFS VM later if you
+  want to go deeper.
 
 ## Build
 
-Primero comprueba el host:
+### Recommended: Arch Linux host
 
 ```bash
-./distro/preflight.sh
+sudo pacman -S --needed archiso rsync curl
+./distro/archiso/build.sh --profile all
 ```
 
-### GitHub Actions (recomendado)
-
-Lanza manualmente el workflow **Live ISO** o crea un tag `v*`. Genera la ISO
-como artefacto descargable. Es un build largo (puede superar 30-60 minutos).
-
-### Linux local
+### Any Linux with Docker or podman
 
 ```bash
-# Opción A: live-build instalado en el host
-sudo apt-get install -y live-build debootstrap cpio apt-utils qemu-user-binfmt
-./distro/build.sh
-
-# Opción B: construir dentro de un contenedor Docker (host Linux)
-USE_CONTAINER=1 ./distro/build.sh
-
-# Arquitectura
-ARCH=arm64 ./distro/build.sh
+./distro/archiso/build.sh --profile all --engine docker
 ```
 
-La ISO queda en `distro/output/`.
+The container runs `archlinux:latest` with `--privileged` because archiso
+needs to mount `/proc`, `/sys`, `/dev` and use `arch-chroot`.
 
-## Grabar el USB
+### GitHub Actions
+
+Run **Arch Live ISO** manually, or push a `v*` tag. It builds `privacy` and
+`audit` on separate runners and uploads both ISOs as artifacts.
+
+### macOS
+
+macOS is **not** a reliable host for building a live ISO. Use GitHub Actions,
+a Linux machine or an Arch VM. You can still write the resulting ISO to a USB
+from macOS with Etcher or `dd`.
+
+## Output
+
+```text
+distro/archiso/out/
+├── mtb-privacy-YYYY.MM.DD-x86_64.iso
+├── mtb-privacy-YYYY.MM.DD-x86_64.iso.sha256
+├── mtb-audit-YYYY.MM.DD-x86_64.iso
+└── mtb-audit-YYYY.MM.DD-x86_64.iso.sha256
+```
+
+Flash with Etcher, `dd` or Ventoy. **The target USB is destroyed.**
 
 ```bash
-# macOS/Linux: identifica el dispositivo con cuidado (diskutil list / lsblk)
-# Ejemplo; sustituye /dev/diskN por el USB correcto. DESTRUYE ese disco.
-sudo dd if=distro/output/kali-linux-*.iso of=/dev/diskN bs=4M status=progress oflag=sync
+lsblk
+sudo dd if=distro/archiso/out/mtb-privacy-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
-También puedes usar **balenaEtcher** o **Ventoy**. En Ventoy basta copiar la ISO
-al USB.
+Secure Boot is not signed. Disable it or enrol your own keys.
 
-> Secure Boot puede impedir el arranque de la ISO. Desactívalo en la BIOS/UEFI
-> o enrola las claves de Kali según la documentación oficial.
+## Privacy image
 
-## Persistencia (opcional)
+- Xfce + LightDM autologin; Tor Browser 16.0.1 bundled.
+- Tor-only: nftables default-deny; only the `tor` user can reach the network.
+- IPv6 disabled; direct DNS blocked; MAC randomized; random hostname and
+  machine-id per boot; volatile logs; no core dumps; no auto-mount of internal
+  disks.
+- No panel, no Metasploit, no offensive tooling, no persistence.
+- Desktop shortcuts: **Tor Browser** and **Comprobar privacidad**.
+- Verify with `mtb-privacy-check`, `mtb-tor-status` and
+  `sudo nft list ruleset`.
 
-Sin persistencia, todo vive en RAM y se pierde al apagar. Para conservar datos,
-proyectos, informes y token:
+This is not Tails and has not received a Tails-level audit. Captive portals are
+not supported because direct HTTP is blocked; use a network without a portal or
+a phone hotspot. Tor does not protect against compromised hardware, firmware,
+browser exploits or identifying user behaviour.
 
-1. Crea una segunda partición ext4 en el USB y etiquétala `persistence`.
-2. En la raíz de esa partición crea `persistence.conf` con:
+## Audit image
 
-   ```text
-   /home
-   ```
+- SDDM with Xfce and KDE Plasma sessions.
+- MarlonTheBug panel on `127.0.0.1:8765`, running as `mtb` with local tools.
+- Firefox, KeePassXC, CherryTree, Flameshot, Xfce/KDE apps.
+- Official Arch tools: nmap, masscan, sqlmap, nikto, gobuster, hydra, hashcat,
+  john, Wireshark, tcpdump, OpenVPN, proxychains, socat, aircrack-ng,
+  bettercap, Impacket and Metasploit.
+- Best-effort Go/Ruby tools: ffuf, nuclei, httpx, chisel, kerbrute, whatweb.
+  See `/etc/mtb-tools.txt` in the image.
+- `archinstall` for installing to disk (Xfce, KDE or another profile).
 
-3. Arranca el USB y elige la entrada **Live USB Persistence**.
+Live credentials:
 
-Kali documenta también persistencia cifrada con LUKS. Si usas persistencia,
-protege el USB: contiene tokens, evidencias y posibles credenciales.
+```text
+user: mtb
+password: mtb
+panel:  http://127.0.0.1:8765/
+```
 
-## Primer arranque
+The audit image provides **no anonymity**. Use it only on systems you own or
+have written authorization to test. The panel logs actions; exploitation is
+disabled by default in the panel config until you enable it per project.
 
-El servicio `marlonthebug.service` arranca el panel en `127.0.0.1:8765`.
-Chromium se abre con el token automáticamente. Si no se abre:
+`archinstall` installs a stock Arch system; the panel is not copied to disk
+automatically yet. That is the next installer milestone.
+
+## Testing
+
+BIOS:
 
 ```bash
-systemctl status marlonthebug
-journalctl -u marlonthebug -n 100
-cat ~/.local/share/MarlonTheBug/panel.token
-# Abre http://127.0.0.1:8765/?token=...
+qemu-system-x86_64 -m 4096 -enable-kvm \
+  -cdrom distro/archiso/out/mtb-privacy-*.iso
 ```
 
-## Actualizar
+UEFI (OVMF):
 
-La ISO es inmutable. Para actualizar:
+```bash
+cp /usr/share/OVMF/OVMF_VARS.fd /tmp/OVMF_VARS.fd
+qemu-system-x86_64 -m 4096 -enable-kvm -machine q35 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.fd \
+  -drive if=pflash,format=raw,file=/tmp/OVMF_VARS.fd \
+  -cdrom distro/archiso/out/mtb-audit-*.iso
+```
 
-- Reconstruye la ISO con el código nuevo (`./distro/build.sh`).
-- O, con persistencia y red, actualiza el venv:
+Test on real hardware after QEMU: UEFI and BIOS, Wi-Fi, Ethernet, keyboard,
+screen resolution and suspend/resume (suspend is disabled in privacy mode).
 
-  ```bash
-  sudo /opt/marlonthebug/venv/bin/pip install --upgrade \
-    git+https://github.com/shakeTheC0de/marlonthebug
-  sudo systemctl restart marlonthebug
-  ```
+## Structure and learning
 
-## Límites
+```text
+distro/archiso/
+├── build.sh                 # assembly + mkarchiso wrapper
+├── common/                  # shared packages, configs, scripts
+├── privacy/                 # Tor-only profile
+└── audit/                   # panel + tools profile
+```
 
-- Uso exclusivo en sistemas propios o con autorización escrita.
-- La imagen incluye herramientas de seguridad de propósito general; no incluye
-  malware, mineros, persistencia ofensiva ni payloads destructivos.
-- El backend `local` no aísla cada ejecución en un contenedor. Para trabajo
-  contra producción, usa el stack Compose con `tools-runner` y
-  `exploit-runner` en una máquina dedicada.
-- Prueba la ISO en una VM antes de usarla en hardware real.
+Read [`archiso/README.md`](archiso/README.md) for the boot flow, the full
+package list, hardening details, troubleshooting and learning exercises.
+
+## Legacy Kali scaffold
+
+`distro/build.sh`, `distro/kali-config/` and `.github/workflows/iso.yml` are the
+previous Kali Live remaster. They are kept as a manual fallback while the Arch
+profiles mature. The Arch images are the primary product.
+
+## Security limits
+
+- The privacy image is a practical, auditable baseline, not a guarantee of
+  anonymity.
+- The audit image contains powerful offensive tools. It is not hardened for
+  hostile networks and has no anonymity.
+- Do not add malware, miners, destructive payloads or unauthorized
+  persistence to either image.
+- Verify the SHA256 of every ISO before flashing and keep the build host
+  trusted.

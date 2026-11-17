@@ -1,5 +1,7 @@
-name: Live ISO
+name: Kali Live ISO (legacy)
 
+# The primary images are now built by .github/workflows/arch-iso.yml.
+# This workflow is kept as a manual fallback while the Arch profiles mature.
 on:
   workflow_dispatch:
     inputs:
@@ -9,19 +11,17 @@ on:
         default: amd64
         type: choice
         options: [amd64, arm64]
-  push:
-    tags: ["v*"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: live-iso-${{ github.ref }}
+  group: kali-live-iso-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   iso:
-    name: Build MarlonTheBug Live
+    name: Build Kali legacy Live
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -53,7 +53,7 @@ jobs:
         run: ls -lh distro/output || true
       - uses: actions/upload-artifact@v4
         with:
-          name: marlonthebug-live-${{ github.event.inputs.arch || 'amd64' }}
+          name: marlonthebug-kali-legacy-${{ github.event.inputs.arch || 'amd64' }}
           path: distro/output/*.iso
           if-no-files-found: error
           retention-days: 7

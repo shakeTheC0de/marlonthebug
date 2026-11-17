@@ -1,0 +1,65 @@
+name: Arch Live ISO
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arch-live-iso-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        # Build the two profiles on separate runners. Each runner starts with
+        # a clean disk, which matters for the KDE/Metasploit audit image.
+        profile: [privacy, audit]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Show free space before build
+        run: df -h
+
+      - name: Build ${{ matrix.profile }} ISO
+        run: |
+          chmod +x distro/archiso/build.sh
+          ./distro/archiso/build.sh --profile "${{ matrix.profile }}" --engine docker
+
+      - name: Fix artifact ownership
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" distro/archiso/out distro/archiso/.build 2>/dev/null || true
+
+      - name: Show output
+        if: always()
+        run: ls -lh distro/archiso/out || true
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: mtb-${{ matrix.profile }}-iso
+          path: |
+            distro/archiso/out/*.iso
+            distro/archiso/out/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
