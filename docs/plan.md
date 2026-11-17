@@ -18,6 +18,7 @@
 | 11. Operación | ✅ | `marlonthebug backup`/`restore`, scripts de backup/instalación, imágenes GHCR multiarquitectura |
 | 12. Laboratorio | ✅ | Juice Shop + WebGoat + Kali/Metasploit aislados, `scripts/lab.sh`, integración con el panel vía `host.docker.internal` |
 | 13. Distro Live | 🚧 | Esqueleto Kali Live + panel + autostart + persistencia; build Linux/CI y workflow de ISO |
+| 14. Aprendizaje | ✅ | Guía de construcción de distro, CPTS, CTF, laboratorio y plan de 6 semanas |
 
 ## Principios
 

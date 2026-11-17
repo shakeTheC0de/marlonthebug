@@ -1,0 +1,61 @@
+## CPTS / CTF / Active Directory learning toolset
+##
+## The goal is a functional desktop that can also be used for the HTB CPTS
+## path and CTFs. It includes the standard tools, not custom exploits.
+
+# Web and API
+burpsuite
+feroxbuster
+seclists
+wordlists
+gobuster
+ffuf
+nuclei
+sqlmap
+
+# Active Directory / Windows
+bloodhound
+neo4j
+impacket-scripts
+netexec
+enum4linux-ng
+certipy-ad
+responder
+mitm6
+evil-winrm
+smbclient
+samba-common-bin
+ldap-utils
+freerdp3-x11
+
+# Pivoting and tunnels
+chisel
+ligolo-ng
+proxychains4
+socat
+openvpn
+wireguard-tools
+
+# Passwords, forensics, reversing and CTF
+hashcat
+john
+wireshark
+tshark
+gdb
+radare2
+ghidra
+binwalk
+foremost
+steghide
+exiftool
+python3-pwntools
+netcat-traditional
+ncat
+flameshot
+
+# Networking
+tcpdump
+traceroute
+whois
+net-tools
+dnsutils

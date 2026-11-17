@@ -6,6 +6,8 @@ MarlonTheBug combina reconocimiento, detección de vulnerabilidades, triaje, int
 
 > Uso exclusivo sobre sistemas propios o con autorización escrita. Cada acción queda registrada en el log de auditoría.
 
+**Aprender construyendo:** la distro Live, el laboratorio y la guía de CPTS/CTF están documentados en [`docs/LEARNING.md`](docs/LEARNING.md).
+
 ![Dashboard del panel](docs/screenshots/dashboard.png)
 
 ---
