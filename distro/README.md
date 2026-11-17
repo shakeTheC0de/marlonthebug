@@ -34,6 +34,12 @@ el navegador. Pensada para un USB: arrancar, trabajar y apagar sin instalación.
 
 ## Build
 
+Primero comprueba el host:
+
+```bash
+./distro/preflight.sh
+```
+
 ### GitHub Actions (recomendado)
 
 Lanza manualmente el workflow **Live ISO** o crea un tag `v*`. Genera la ISO

@@ -97,6 +97,7 @@ Actions; macOS no es un host fiable para construir ISOs live.
 
 ```bash
 # En Linux
+./distro/preflight.sh
 ./distro/build.sh
 
 # En CI: Actions → Live ISO → Run workflow (amd64/arm64)
