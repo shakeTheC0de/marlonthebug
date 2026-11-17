@@ -4,6 +4,6 @@ Type=Application
 Name=MarlonTheBug
 Comment=Auditoría, explotación controlada y reporting
 Exec=/usr/local/bin/marlonthebug-live
-Icon=utilities-terminal
+Icon=marlonthebug
 Terminal=false
 Categories=Security;Network;

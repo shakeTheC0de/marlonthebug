@@ -41,8 +41,31 @@ libgdk-pixbuf-2.0-0
 libffi8
 fonts-dejavu-core
 
-# Browser / PDF
+# Desktop apps: notes, browsers, office, media and app installation
+firefox-esr
 chromium
+thunderbird
+libreoffice
+libreoffice-l10n-es
+vlc
+cherrytree
+zim
+xfce4-notes-plugin
+keepassxc
+synaptic
+flatpak
+zenity
+timeshift
+gparted
+ufw
+gufw
+file-roller
+p7zip-full
+neovim
+tmux
+htop
+
+# Browser / PDF
 ca-certificates
 curl
 git

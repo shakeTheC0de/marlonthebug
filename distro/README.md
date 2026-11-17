@@ -10,6 +10,12 @@ el navegador. Pensada para un USB: arrancar, trabajar y apagar sin instalación.
 - Chromium con ventana del panel al iniciar sesión.
 - `metasploit-framework`, `sqlmap`, `nmap`, `nikto`, `whatweb`, `ffuf`,
   `gobuster`, `nuclei`, `commix`, `hydra`.
+- Escritorio Xfce funcional: Firefox, Chromium, Thunderbird, LibreOffice,
+  VLC, CherryTree, Zim, notas Xfce, KeePassXC, Synaptic, Flatpak, GParted,
+  Timeshift, GUFW, neovim, tmux y htop.
+- Ventana de bienvenida con accesos a panel, notas, navegador, instalación de
+  aplicaciones, actualización y documentación.
+- Fondo de escritorio y menú propios de MarlonTheBug.
 - Backends `local` para herramientas y explotación: todo corre dentro del
   sistema live, sin Docker. Es un compromiso de portabilidad; para aislamiento
   por contenedor usa el stack Compose normal.

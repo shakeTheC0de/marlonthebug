@@ -12,7 +12,10 @@ python3 -m venv /opt/marlonthebug/venv
 /opt/marlonthebug/venv/bin/pip install --no-cache-dir "${WHEEL}" weasyprint
 
 chown -R kali:kali /opt/marlonthebug
+ln -sf /opt/marlonthebug/venv/bin/marlonthebug /usr/local/bin/marlonthebug
 chmod +x /usr/local/bin/marlonthebug-live
+chmod +x /usr/local/bin/marlonthebug-welcome
+chmod +x /usr/local/bin/marlonthebug-wallpaper
 chmod +x /etc/skel/Desktop/marlonthebug.desktop
 
 systemctl enable marlonthebug.service || true

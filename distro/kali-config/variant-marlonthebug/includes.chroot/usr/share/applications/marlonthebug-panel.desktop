@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MarlonTheBug Panel
+Comment=Abre el panel de auditoría
+Exec=/usr/local/bin/marlonthebug-live
+Icon=marlonthebug
+Terminal=false
+Categories=Security;Network;

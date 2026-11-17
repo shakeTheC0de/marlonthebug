@@ -48,6 +48,8 @@ rm -rf "$KALI_DIR/kali-config/variant-$VARIANT"
 cp -r "$DISTRO/kali-config/variant-$VARIANT" "$KALI_DIR/kali-config/"
 mkdir -p "$KALI_DIR/kali-config/variant-$VARIANT/includes.chroot/opt/marlonthebug"
 cp "$WHEEL_DIR"/*.whl "$KALI_DIR/kali-config/variant-$VARIANT/includes.chroot/opt/marlonthebug/"
+mkdir -p "$KALI_DIR/kali-config/variant-$VARIANT/includes.chroot/usr/share/doc/marlonthebug"
+cp "$ROOT/README.md" "$ROOT/distro/README.md" "$KALI_DIR/kali-config/variant-$VARIANT/includes.chroot/usr/share/doc/marlonthebug/"
 
 echo "[4/4] Construyendo la ISO ($ARCH)…"
 mkdir -p "$OUT_DIR"

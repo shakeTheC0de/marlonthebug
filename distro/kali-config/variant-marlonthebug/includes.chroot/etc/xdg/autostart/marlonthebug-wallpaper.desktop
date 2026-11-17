@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=MarlonTheBug Wallpaper
+Comment=Aplica el fondo de MarlonTheBug
+Exec=/usr/local/bin/marlonthebug-wallpaper
+Terminal=false
+X-GNOME-Autostart-enabled=true
