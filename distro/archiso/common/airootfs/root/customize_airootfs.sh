@@ -180,8 +180,16 @@ EOF
         go clean -modcache >/dev/null 2>&1 || true
     fi
     if command -v gem >/dev/null 2>&1; then
-        gem install --no-document --bindir /usr/local/bin whatweb \
-            || echo "[mtb] AVISO: no se pudo instalar whatweb." >&2
+        # The 'whatweb' gem is not published on RubyGems; install the
+        # established upstream project instead.
+        if [[ ! -x /usr/local/bin/whatweb ]]; then
+            if git clone --depth 1 https://github.com/urbanadventurer/WhatWeb /opt/whatweb >/dev/null 2>&1; then
+                chmod +x /opt/whatweb/whatweb
+                ln -sf /opt/whatweb/whatweb /usr/local/bin/whatweb
+            else
+                echo "[mtb] AVISO: no se pudo instalar whatweb." >&2
+            fi
+        fi
     fi
 
     # Commix is not in the official repositories. It is a well-known,
@@ -226,6 +234,10 @@ fi
 # systemd generates a new one from an empty /etc/machine-id at boot.
 # Keep this at the very end so no later package script can repopulate it.
 # ---------------------------------------------------------------------------
+chmod 0400 /etc/shadow 2>/dev/null || true
+chmod 0400 /etc/gshadow 2>/dev/null || true
+find /etc -maxdepth 2 -name '*.pacnew' -delete 2>/dev/null || true
+
 : >/etc/machine-id
 rm -f /var/lib/dbus/machine-id
 install -d /var/lib/dbus

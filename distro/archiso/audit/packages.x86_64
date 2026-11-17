@@ -120,6 +120,7 @@ traceroute
 net-tools
 go
 ruby
+ruby-addressable
 rubygems
 libxml2
 libxslt
