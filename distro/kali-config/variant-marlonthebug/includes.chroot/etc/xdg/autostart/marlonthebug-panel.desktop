@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=MarlonTheBug
+Comment=Panel de auditoría de seguridad
+Exec=/usr/local/bin/marlonthebug-live
+Terminal=false
+X-GNOME-Autostart-enabled=true

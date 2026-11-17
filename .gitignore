@@ -18,6 +18,8 @@ htmlcov/
 data/
 mtb-data/
 lab/
+distro/.build/
+distro/output/
 backups/
 workspaces/
 reports/

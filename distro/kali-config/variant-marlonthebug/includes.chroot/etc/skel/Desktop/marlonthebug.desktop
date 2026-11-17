@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MarlonTheBug
+Comment=Auditoría, explotación controlada y reporting
+Exec=/usr/local/bin/marlonthebug-live
+Icon=utilities-terminal
+Terminal=false
+Categories=Security;Network;

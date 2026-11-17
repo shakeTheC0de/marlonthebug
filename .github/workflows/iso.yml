@@ -1,0 +1,47 @@
+name: Live ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "Arquitectura del ISO"
+        required: true
+        default: amd64
+        type: choice
+        options: [amd64, arm64]
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-iso-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  iso:
+    name: Build MarlonTheBug Live
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Build ISO
+        env:
+          ARCH: ${{ github.event.inputs.arch || 'amd64' }}
+          USE_CONTAINER: "1"
+          CONTAINER: docker
+        run: |
+          chmod +x distro/build.sh
+          ./distro/build.sh
+      - name: Show output
+        run: ls -lh distro/output || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marlonthebug-live-${{ github.event.inputs.arch || 'amd64' }}
+          path: distro/output/*.iso
+          if-no-files-found: error
+          retention-days: 7

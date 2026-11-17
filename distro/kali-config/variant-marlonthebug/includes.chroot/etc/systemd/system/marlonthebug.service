@@ -1,0 +1,23 @@
+[Unit]
+Description=MarlonTheBug security panel
+Documentation=https://github.com/shakeTheC0de/marlonthebug
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kali
+Group=kali
+Environment=HOME=/home/kali
+Environment=MTB_PANEL_HOST=127.0.0.1
+Environment=MTB_PANEL_PORT=8765
+Environment=MTB_TOOLS_BACKEND=local
+Environment=MTB_EXPLOIT_BACKEND=local
+ExecStart=/opt/marlonthebug/venv/bin/marlonthebug panel --host 127.0.0.1 --port 8765 --no-browser --data-dir /home/kali/.local/share/MarlonTheBug
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

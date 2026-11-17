@@ -1,0 +1,18 @@
+#!/bin/sh
+# Install MarlonTheBug into the live image and enable the panel service.
+set -eu
+
+WHEEL="$(ls /opt/marlonthebug/*.whl 2>/dev/null | head -n 1 || true)"
+if [ -z "${WHEEL}" ]; then
+  echo "No MarlonTheBug wheel found in /opt/marlonthebug" >&2
+  exit 1
+fi
+
+python3 -m venv /opt/marlonthebug/venv
+/opt/marlonthebug/venv/bin/pip install --no-cache-dir "${WHEEL}" weasyprint
+
+chown -R kali:kali /opt/marlonthebug
+chmod +x /usr/local/bin/marlonthebug-live
+chmod +x /etc/skel/Desktop/marlonthebug.desktop
+
+systemctl enable marlonthebug.service || true

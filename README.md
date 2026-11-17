@@ -88,6 +88,23 @@ docker compose logs -f panel  # token y URL
 ./scripts/backup.sh           # backup consistente
 ```
 
+### MarlonTheBug Live (USB)
+
+La carpeta [`distro/`](distro/README.md) contiene el esqueleto para una ISO
+basada en Kali Live con el panel preinstalado, autostart y persistencia
+opcional. El build se lanza en Linux o con el workflow **Live ISO** de GitHub
+Actions; macOS no es un host fiable para construir ISOs live.
+
+```bash
+# En Linux
+./distro/build.sh
+
+# En CI: Actions → Live ISO → Run workflow (amd64/arm64)
+```
+
+La ISO se graba con Etcher, `dd` o Ventoy. Sin persistencia, todo se pierde al
+apagar; con una partición `persistence` se conservan `/home`, informes y token.
+
 ### Laboratorio de práctica
 
 ```bash
