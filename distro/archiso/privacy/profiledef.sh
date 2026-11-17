@@ -23,6 +23,6 @@ file_permissions=(
   ["/usr/local/bin/mtb-tor-browser"]="0:0:755"
   ["/usr/local/bin/mtb-privacy-check"]="0:0:755"
   ["/usr/local/bin/mtb-privacy-session"]="0:0:755"
-  ["/usr/local/bin/mtb-set-wallpaper"]="0:0:755"
+  ["/usr/local/bin/mtb-network-prep"]="0:0:755"
   ["/usr/local/bin/mtb-set-wallpaper"]="0:0:755"
 )

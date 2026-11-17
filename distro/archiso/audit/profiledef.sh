@@ -19,6 +19,6 @@ file_permissions=(
   ["/usr/local/bin/mtb-open-panel"]="0:0:755"
   ["/usr/local/bin/mtb-audit-warning"]="0:0:755"
   ["/usr/local/bin/mtb-install"]="0:0:755"
-  ["/usr/local/bin/mtb-set-wallpaper"]="0:0:755"
+  ["/usr/local/bin/mtb-network-prep"]="0:0:755"
   ["/usr/local/bin/mtb-set-wallpaper"]="0:0:755"
 )

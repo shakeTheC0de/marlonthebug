@@ -62,6 +62,7 @@ chmod +x /home/mtb/Desktop/*.desktop 2>/dev/null || true
 # Services common to both profiles
 # ---------------------------------------------------------------------------
 systemctl enable NetworkManager.service
+systemctl enable mtb-network-prep.service
 systemctl disable iwd.service 2>/dev/null || true
 systemctl mask systemd-firstboot.service 2>/dev/null || true
 systemctl disable getty@tty1.service 2>/dev/null || true
@@ -102,16 +103,6 @@ if [[ "$VARIANT" == "privacy" ]]; then
     sed "s/@TOR_UID@/${tor_uid}/g" /etc/nftables.conf.template >/etc/nftables.conf
     chmod 0644 /etc/nftables.conf
     rm -f /etc/nftables.conf.template
-
-    rm -f /etc/resolv.conf
-    cat >/etc/resolv.conf <<'EOF'
-# Direct DNS is blocked by nftables for every process except Tor.
-# Applications must use the Tor SOCKS proxy (or torsocks).
-nameserver 9.9.9.9
-nameserver 1.1.1.1
-options timeout:2 attempts:2
-EOF
-    chmod 0644 /etc/resolv.conf
 
     update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 
@@ -228,14 +219,6 @@ EOF
     setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap 2>/dev/null || true
     setcap cap_net_raw,cap_net_admin+eip /usr/bin/masscan 2>/dev/null || true
     setcap cap_net_raw,cap_net_admin+eip /usr/bin/bettercap 2>/dev/null || true
-fi
-
-# The audit build needs the chroot resolver for pip/go/gem/git. Now that all
-# network installs are done, hand DNS to NetworkManager at boot.
-if [[ "$VARIANT" == "audit" ]]; then
-    rm -f /etc/resolv.conf
-    : >/etc/resolv.conf
-    chmod 0644 /etc/resolv.conf
 fi
 
 # ---------------------------------------------------------------------------

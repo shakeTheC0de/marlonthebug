@@ -1,0 +1,16 @@
+[Unit]
+Description=Prepare DNS before NetworkManager starts
+Documentation=https://github.com/shakeTheC0de/marlonthebug
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target NetworkManager.service
+Wants=network-pre.target
+ConditionPathExists=/etc/mtb-variant
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mtb-network-prep
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

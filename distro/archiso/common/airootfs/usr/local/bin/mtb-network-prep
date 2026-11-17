@@ -1,0 +1,21 @@
+#!/bin/sh
+# Prepare /etc/resolv.conf for the live session before NetworkManager starts.
+# privacy: static resolvers, but only Tor is allowed to query them.
+# audit:   empty file; NetworkManager owns DNS and fills it on connection.
+set -eu
+
+variant="$(cat /etc/mtb-variant 2>/dev/null || echo audit)"
+
+rm -f /etc/resolv.conf
+if [ "$variant" = "privacy" ]; then
+    cat >/etc/resolv.conf <<'EOF'
+# Direct DNS is blocked by nftables for every process except Tor.
+# Applications must use the Tor SOCKS proxy (or torsocks).
+nameserver 9.9.9.9
+nameserver 1.1.1.1
+options timeout:2 attempts:2
+EOF
+else
+    : >/etc/resolv.conf
+fi
+chmod 0644 /etc/resolv.conf
