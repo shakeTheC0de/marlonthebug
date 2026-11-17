@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Xfce autostart: wait for a usable Tor circuit, then open Tor Browser.
+set -euo pipefail
+
+notify() {
+    local urgency="$1" title="$2" body="$3"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u "$urgency" -a MarlonTheBug "$title" "$body" || true
+    fi
+}
+
+notify normal "MarlonTheBug Privacy" "Comprobando el firewall y esperando a Tor..."
+sleep 2
+
+# Make Tor Browser the default handler for HTTP(S) links in this session.
+xdg-settings set default-web-browser tor-browser.desktop >/dev/null 2>&1 || true
+
+if ! systemctl is-active --quiet nftables.service; then
+    notify critical "Firewall no activo" "No se abrirá el navegador. Revisa: systemctl status nftables"
+    exit 1
+fi
+
+for _ in $(seq 1 90); do
+    if /usr/local/bin/mtb-tor-status >/dev/null 2>&1; then
+        notify normal "Tor conectado" "Abriendo Tor Browser..."
+        exec /usr/local/bin/mtb-tor-browser
+    fi
+    sleep 2
+done
+
+notify critical "Tor no conectado" "Revisa la red y el servicio Tor: systemctl status tor"
+exit 1

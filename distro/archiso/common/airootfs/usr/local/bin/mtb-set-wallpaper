@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Set the MarlonTheBug wallpaper on every Xfce monitor.
+# Branding is intentionally minimal for now; this keeps the desktop usable
+# while the visual identity is designed later.
+set -euo pipefail
+
+variant="$(cat /etc/mtb-variant 2>/dev/null || echo privacy)"
+wallpaper="/usr/share/backgrounds/marlonthebug/${variant}.svg"
+
+[[ -f "$wallpaper" ]] || wallpaper="/usr/share/backgrounds/marlonthebug/marlonthebug.svg"
+command -v xfconf-query >/dev/null 2>&1 || exit 0
+command -v xfce4-session >/dev/null 2>&1 || exit 0
+
+for prop in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/last-image$' || true); do
+    xfconf-query -c xfce4-desktop -p "$prop" -s "$wallpaper" >/dev/null 2>&1 || true
+done
+for prop in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep '/image-style$' || true); do
+    xfconf-query -c xfce4-desktop -p "$prop" -s 5 >/dev/null 2>&1 || true
+done

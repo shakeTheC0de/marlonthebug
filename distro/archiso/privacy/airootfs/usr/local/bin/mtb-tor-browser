@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Launch Tor Browser using the system Tor daemon, not its bundled Tor.
+# The firewall only lets the 'tor' user reach the network; a bundled Tor
+# process running as mtb would be blocked by design.
+set -euo pipefail
+
+browser="/opt/tor-browser/Browser/start-tor-browser"
+if [[ ! -x "$browser" ]]; then
+    echo "Tor Browser no está instalado en $browser" >&2
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send -u critical -a MarlonTheBug "Tor Browser no encontrado" "Reconstruye la ISO o revisa /opt/tor-browser."
+    exit 1
+fi
+
+if ! /usr/local/bin/mtb-tor-status >/dev/null 2>&1; then
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send -u critical -a MarlonTheBug "Tor no está conectado" "Espera a que Tor arranque o revisa: systemctl status tor"
+    exit 1
+fi
+
+export TOR_SKIP_LAUNCH=1
+export TOR_SKIP_CONTROLPORTTEST=1
+export TOR_SOCKS_HOST=127.0.0.1
+export TOR_SOCKS_PORT=9050
+export TOR_PROXY_TYPE=socks5
+
+exec "$browser" --detach "$@"

@@ -28,7 +28,7 @@ workspaces/
 reports/
 logs/
 private/
-local/
+/local/
 *.db
 *.db-journal
 *.db-wal

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Best-effort MAC randomization for physical network interfaces.
+# Some drivers/firmware ignore MAC changes; we log and continue because
+# blocking the whole boot is worse for a live system.
+set -euo pipefail
+
+if ! command -v macchanger >/dev/null 2>&1; then
+    echo "macchanger no está instalado" >&2
+    exit 0
+fi
+
+changed=0
+for sysif in /sys/class/net/*; do
+    iface="${sysif##*/}"
+    case "$iface" in
+        lo|docker*|veth*|virbr*|br-*|tun*|tap*|wg*|bond*|dummy*|sit*|ip6tnl*)
+            continue
+            ;;
+    esac
+    # Only physical devices (PCI/USB) or wireless PHYs.
+    [[ -e "$sysif/device" || -e "$sysif/phy80211" ]] || continue
+
+    ip link set dev "$iface" down >/dev/null 2>&1 || true
+    if macchanger -A "$iface" >/dev/null 2>&1; then
+        echo "MAC aleatoria aplicada en $iface"
+        changed=$((changed + 1))
+    else
+        echo "AVISO: no se pudo cambiar la MAC de $iface" >&2
+    fi
+    ip link set dev "$iface" up >/dev/null 2>&1 || true
+done
+
+if [[ "$changed" -eq 0 ]]; then
+    echo "No se encontraron interfaces físicas para aleatorizar."
+fi

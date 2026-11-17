@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Open the local MarlonTheBug panel with its token.
+set -euo pipefail
+
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+token_file="$data_home/MarlonTheBug/panel.token"
+
+for _ in $(seq 1 30); do
+    [[ -s "$token_file" ]] && break
+    sleep 1
+done
+
+if ! curl -fsS --max-time 3 http://127.0.0.1:8765/ >/dev/null 2>&1; then
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -u critical -a MarlonTheBug "Panel no disponible" \
+            "Revisa: systemctl status marlonthebug"
+    fi
+fi
+
+if [[ -s "$token_file" ]]; then
+    exec xdg-open "http://127.0.0.1:8765/?token=$(cat "$token_file")"
+fi
+exec xdg-open "http://127.0.0.1:8765/"

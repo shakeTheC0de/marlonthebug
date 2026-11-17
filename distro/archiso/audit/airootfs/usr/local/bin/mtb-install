@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Launch the Arch installer from the desktop. archinstall installs a stock
+# Arch system with the desktop environment you choose (Xfce, KDE, etc.).
+set -euo pipefail
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    exec sudo archinstall
+fi
+exec archinstall

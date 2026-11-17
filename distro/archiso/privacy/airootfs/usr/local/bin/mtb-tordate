@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Set the clock through Tor after bootstrap.
+# NTP is disabled in privacy mode; the hardware clock is only a starting point.
+set -euo pipefail
+
+if ! /usr/local/bin/mtb-tor-status >/dev/null 2>&1; then
+    # Wait up to two minutes for Tor. The desktop can start in parallel.
+    for _ in $(seq 1 60); do
+        /usr/local/bin/mtb-tor-status >/dev/null 2>&1 && break
+        sleep 2
+    done
+fi
+/usr/local/bin/mtb-tor-status >/dev/null 2>&1 || exit 0
+
+date_header="$(
+    curl --socks5-hostname 127.0.0.1:9050 -fsSI --max-time 20 https://www.torproject.org 2>/dev/null \
+        | awk -F': ' 'tolower($1) == "date" { print $2 }' \
+        | tr -d '\r' \
+        | head -n 1
+)"
+
+if [[ -n "$date_header" ]]; then
+    if date -u -s "$date_header" >/dev/null 2>&1; then
+        echo "Reloj ajustado por Tor: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+    else
+        echo "No se pudo ajustar el reloj con la cabecera Date." >&2
+    fi
+else
+    echo "No se recibió una cabecera Date a través de Tor." >&2
+fi

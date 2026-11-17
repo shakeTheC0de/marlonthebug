@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Visible reminder that audit mode has no anonymity.
+set -euo pipefail
+
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send -u critical -a "MarlonTheBug Audit" \
+        "RED DIRECTA — SIN ANONIMATO" \
+        "Usa solo sistemas propios o con autorización escrita. El panel registra cada acción."
+fi

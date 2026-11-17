@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Manual privacy self-check. It is intentionally explicit: it tests the
+# properties this image actually enforces, and prints what it cannot test.
+set -uo pipefail
+
+# The checks must not be influenced by a proxy configured in the session.
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy 2>/dev/null || true
+
+ok=0
+bad=0
+check_ok() { printf '  [ OK ]    %s\n' "$*"; ok=$((ok + 1)); }
+check_bad() { printf '  [ FALLO ] %s\n' "$*"; bad=$((bad + 1)); }
+check_info() { printf '  [ INFO ]  %s\n' "$*"; }
+
+printf '\nMarlonTheBug Privacy — comprobación de fugas\n'
+printf '============================================\n\n'
+
+if systemctl is-active --quiet nftables.service; then
+    check_ok "nftables está activo"
+else
+    check_bad "nftables NO está activo"
+fi
+
+if [[ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0)" == "1" ]]; then
+    check_ok "IPv6 deshabilitado en el kernel"
+else
+    check_bad "IPv6 sigue habilitado"
+fi
+
+if ip -6 addr show scope global 2>/dev/null | grep -q 'inet6'; then
+    check_bad "hay una dirección IPv6 global"
+else
+    check_ok "sin dirección IPv6 global"
+fi
+
+# Direct IPv4 must fail. A failure here is the expected secure result.
+if curl -4 -sS --max-time 6 -o /dev/null https://example.com 2>/dev/null; then
+    check_bad "una conexión directa a Internet ha funcionado"
+else
+    check_ok "salida directa bloqueada"
+fi
+
+# Direct DNS must fail too.
+if timeout 6 getent hosts example.com >/dev/null 2>&1; then
+    check_bad "la resolución DNS directa ha funcionado"
+else
+    check_ok "DNS directo bloqueado"
+fi
+
+# Tor itself must work.
+tor_json="$(curl -sS --max-time 30 --socks5-hostname 127.0.0.1:9050 https://check.torproject.org/api/ip 2>/dev/null || true)"
+if grep -q '"IsTor":true' <<<"$tor_json"; then
+    check_ok "el tráfico por SOCKS sale por Tor"
+    check_info "salida Tor: $(sed -n 's/.*"IP":"\([^"]*\)".*/\1/p' <<<"$tor_json")"
+else
+    check_bad "no se pudo confirmar la salida por Tor"
+fi
+
+printf '\nInterfaces y MAC actuales (la MAC permanente no se muestra):\n'
+for sysif in /sys/class/net/*; do
+    iface="${sysif##*/}"
+    case "$iface" in lo|docker*|veth*|virbr*|br-*|tun*|tap*|wg*) continue ;; esac
+    [[ -e "$sysif/device" || -e "$sysif/phy80211" ]] || continue
+    printf '  %-12s %s\n' "$iface" "$(cat "$sysif/address" 2>/dev/null || echo '?')"
+done
+
+printf '\nResultado: %d correctas, %d fallos\n' "$ok" "$bad"
+printf 'Esto no sustituye una auditoría: firmware, hardware, exploits del\n'
+printf 'navegador y errores humanos quedan fuera del alcance.\n\n'
+[[ "$bad" -eq 0 ]]

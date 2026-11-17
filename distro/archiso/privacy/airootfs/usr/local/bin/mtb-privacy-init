@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Early privacy boot hardening. Runs before NetworkManager.
+set -euo pipefail
+
+log() { printf '[mtb-privacy] %s\n' "$*"; }
+
+# Random hostname per boot. Avoid hostnamectl here: it needs D-Bus, and this
+# unit runs before the network and before most of the user session.
+new_host="mtb-$(tr -dc 'a-z0-9' </dev/urandom | head -c 10)"
+printf '%s\n' "$new_host" >/proc/sys/kernel/hostname
+printf '%s\n' "$new_host" >/etc/hostname
+if [[ -f /etc/hosts ]]; then
+    sed -i "s/^127\.0\.1\.1.*/127.0.1.1 ${new_host}/" /etc/hosts
+fi
+log "hostname: $new_host"
+
+# Apply the privacy sysctl set (IPv6 off, no core dumps, redirects off...).
+sysctl --system >/dev/null 2>&1 || true
+
+# Unblock Wi-Fi after resume/rfkill soft blocks. This does not expose traffic:
+# the firewall and Tor-only policy are already in place.
+if command -v rfkill >/dev/null 2>&1; then
+    rfkill unblock wifi >/dev/null 2>&1 || true
+fi
+
+# Best-effort MAC randomization for physical interfaces.
+/usr/local/bin/mtb-macspoof || log "MAC spoofing reported an error (see journal)"
+
+# The live user's home must not be readable by other local users.
+chmod 0700 /home/mtb 2>/dev/null || true
+
+# Core dumps cannot be enabled by a user process.
+ulimit -c 0 || true
+printf '|/bin/false\n' >/proc/sys/kernel/core_pattern 2>/dev/null || true
+
+log "privacy init complete"

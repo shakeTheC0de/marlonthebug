@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Exit 0 only when Tor has reached 100% bootstrap in this boot.
+set -euo pipefail
+
+systemctl is-active --quiet tor.service || {
+    echo "tor: inactivo"
+    exit 1
+}
+
+if journalctl -u tor.service -b --no-pager 2>/dev/null | grep -q 'Bootstrapped 100%'; then
+    echo "tor: conectado"
+    exit 0
+fi
+
+echo "tor: arrancando"
+exit 1
