@@ -1,0 +1,18 @@
+[Unit]
+Description=MarlonTheBug privacy boot hardening
+Documentation=https://github.com/shakeTheC0de/marlonthebug
+DefaultDependencies=no
+After=local-fs.target systemd-sysusers.service
+Before=network-pre.target NetworkManager.service
+Wants=network-pre.target
+ConditionPathExists=/etc/mtb-variant
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mtb-privacy-init
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sysinit.target

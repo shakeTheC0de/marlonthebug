@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Instalar en disco
+Comment=Instalador Arch Linux (archinstall): elige Xfce, KDE u otro entorno
+Exec=/usr/local/bin/mtb-install
+Icon=system-software-install
+Terminal=true
+Categories=System;

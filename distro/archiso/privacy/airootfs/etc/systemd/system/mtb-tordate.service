@@ -1,0 +1,16 @@
+[Unit]
+Description=Set the system clock through Tor
+Documentation=https://github.com/shakeTheC0de/marlonthebug
+After=tor.service network-online.target
+Wants=tor.service network-online.target
+ConditionPathExists=/etc/mtb-variant
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mtb-tordate
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

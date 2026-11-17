@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=MarlonTheBug
+Comment=Abrir el panel de auditoría
+Exec=/usr/local/bin/mtb-open-panel
+Terminal=false
+X-GNOME-Autostart-enabled=true

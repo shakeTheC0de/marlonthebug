@@ -1,0 +1,15 @@
+MarlonTheBug Audit
+==================
+
+  *** RED DIRECTA — ESTE MODO NO PROPORCIONA ANONIMATO ***
+
+  Usa esta imagen solo contra sistemas propios o con autorización escrita.
+  Cada comando ejecutado por el panel queda registrado.
+
+  Panel:      http://127.0.0.1:8765  (se abre al iniciar sesión)
+  Datos:      ~/.local/share/MarlonTheBug
+  Herramientas: /etc/mtb-tools.txt
+  Instalador: archinstall  (entrada "Instalar en disco")
+  Usuario:    mtb / contraseña: mtb
+
+  Xfce y KDE Plasma están disponibles en la pantalla de SDDM.

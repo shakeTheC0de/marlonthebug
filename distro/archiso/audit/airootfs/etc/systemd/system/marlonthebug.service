@@ -1,0 +1,30 @@
+[Unit]
+Description=MarlonTheBug security panel
+Documentation=https://github.com/shakeTheC0de/marlonthebug
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=mtb
+Group=mtb
+WorkingDirectory=/home/mtb
+Environment=HOME=/home/mtb
+Environment=PYTHONPATH=/opt/marlonthebug
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=MTB_PANEL_HOST=127.0.0.1
+Environment=MTB_PANEL_PORT=8765
+Environment=MTB_TOOLS_BACKEND=local
+Environment=MTB_EXPLOIT_BACKEND=local
+Environment=MTB_INTEL_OFFLINE=1
+ExecStart=/usr/bin/python -m marlonthebug.main panel --host 127.0.0.1 --port 8765 --no-browser
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

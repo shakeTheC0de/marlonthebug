@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Comprobar privacidad
+Comment=Comprueba firewall, IPv6, DNS y salida por Tor
+Exec=xfce4-terminal --hold -e /usr/local/bin/mtb-privacy-check
+Icon=security-high
+Terminal=false
+Categories=System;Security;

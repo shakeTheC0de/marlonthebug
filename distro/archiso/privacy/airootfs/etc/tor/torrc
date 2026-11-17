@@ -1,0 +1,7 @@
+# MarlonTheBug Privacy: client-only Tor.
+# Tor Browser connects to this daemon with TOR_SKIP_LAUNCH=1.
+SocksPort 9050
+DNSPort 5353
+DataDirectory /var/lib/tor
+ClientOnly 1
+Log notice stdout

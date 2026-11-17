@@ -1,0 +1,49 @@
+#!/usr/sbin/nft -f
+# MarlonTheBug Privacy firewall.
+#
+# Default-deny for input, forward and output. The only process allowed to
+# reach the network directly is the Tor daemon (numeric UID substituted at
+# build time). DHCP is allowed so NetworkManager can obtain a lease.
+#
+# IPv6 is disabled with the kernel parameter ipv6.disable=1, so this inet
+# table only needs IPv4 rules in practice.
+flush ruleset
+
+define tor_uid = @TOR_UID@
+
+table inet mtb {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # DHCP replies from the local network.
+        udp sport 67 udp dport 68 accept
+
+        # Path-MTU / unreachable control messages. No inbound echo.
+        icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+    }
+
+    chain output {
+        type filter hook output priority filter; policy drop;
+
+        # Loopback: Tor SOCKS/DNS, panel and local IPC.
+        oif lo accept
+        ct state established,related accept
+
+        # Only Tor may reach the internet.
+        meta skuid $tor_uid accept
+
+        # DHCP requests.
+        udp sport 68 udp dport 67 accept
+
+        # Outbound path-MTU / unreachable control messages.
+        icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+    }
+}

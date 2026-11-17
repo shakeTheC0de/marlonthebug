@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MarlonTheBug
+Comment=Panel de auditoría y reporting
+Exec=/usr/local/bin/mtb-open-panel
+Icon=marlonthebug
+Terminal=false
+Categories=Security;
+StartupNotify=true

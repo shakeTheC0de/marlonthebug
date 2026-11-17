@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Aviso de auditoría
+Comment=Recordatorio de red directa y uso autorizado
+Exec=/usr/local/bin/mtb-audit-warning
+Terminal=false
+X-GNOME-Autostart-enabled=true

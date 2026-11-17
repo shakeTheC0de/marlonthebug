@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MarlonTheBug Privacy
+Comment=Esperar a Tor y abrir Tor Browser
+Exec=/usr/local/bin/mtb-privacy-session
+Terminal=false
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true

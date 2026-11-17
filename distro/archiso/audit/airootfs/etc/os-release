@@ -1,0 +1,11 @@
+NAME="MarlonTheBug Audit"
+PRETTY_NAME="MarlonTheBug Audit 0.1 (Arch Linux)"
+ID=mtb-audit
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;248;113;113"
+HOME_URL="https://github.com/shakeTheC0de/marlonthebug"
+DOCUMENTATION_URL="https://github.com/shakeTheC0de/marlonthebug/tree/main/distro/archiso"
+SUPPORT_URL="https://github.com/shakeTheC0de/marlonthebug/issues"
+BUG_REPORT_URL="https://github.com/shakeTheC0de/marlonthebug/issues"
+LOGO=marlonthebug

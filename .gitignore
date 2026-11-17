@@ -20,6 +20,9 @@ mtb-data/
 lab/
 distro/.build/
 distro/output/
+distro/archiso/.build/
+distro/archiso/out/
+distro/archiso/cache/
 backups/
 workspaces/
 reports/

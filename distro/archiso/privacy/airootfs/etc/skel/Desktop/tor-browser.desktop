@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Tor Browser
+Comment=Navegador anónimo a través de la red Tor
+Exec=/usr/local/bin/mtb-tor-browser
+Icon=/opt/tor-browser/Browser/browser/chrome/icons/default/default128.png
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;
+StartupNotify=true

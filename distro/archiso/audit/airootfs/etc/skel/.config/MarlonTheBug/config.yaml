@@ -1,0 +1,21 @@
+general:
+  user_agent: "MarlonTheBug/2.0 (authorized security assessment)"
+
+scope:
+  require_confirmation: true
+  allow_exploitation: false
+
+tools:
+  backend: local
+
+exploitation:
+  backend: local
+  confirm_before_payload: true
+  confirm_before_listener: true
+
+intel:
+  offline: true
+
+reports:
+  language: es
+  company: MarlonTheBug

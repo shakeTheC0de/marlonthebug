@@ -1,0 +1,13 @@
+MarlonTheBug Privacy
+
+  Sistema live amnésico. Todo vive en RAM y desaparece al apagar.
+  La red es Tor-only: el firewall bloquea la salida directa.
+  Tor Browser usa el demonio Tor del sistema (SOCKS 127.0.0.1:9050).
+
+  Comprobaciones:  mtb-privacy-check
+  Estado de Tor:   mtb-tor-status
+  Firewall:        sudo nft list ruleset
+
+  Limitaciones: hardware/firmware comprometidos, exploits del navegador,
+  portales cautivos y errores humanos no están cubiertos. Este sistema
+  no ha pasado una auditoría como Tails.
