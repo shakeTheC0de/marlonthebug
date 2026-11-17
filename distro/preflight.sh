@@ -59,4 +59,4 @@ echo "  sudo usermod -aG docker \$USER   # cierra y abre sesión"
 echo "  USE_CONTAINER=1 ./distro/build.sh"
 echo "  # o, si ya tienes live-build de Kali: ./distro/build.sh"
 echo
-echo "La ISO queda en distro/output/. Antes de grabarla, pruébala en QEMU/VirtualBox."
+echo "La ISO queda en distro/output/. Antes de grabarla, pruébala en QEMU o en una VM."

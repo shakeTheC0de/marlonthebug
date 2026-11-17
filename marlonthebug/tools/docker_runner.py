@@ -211,7 +211,7 @@ class DockerToolRunner:
 
 
 def docker_url(url: str) -> str:
-    """Rewrite localhost targets so Docker Desktop containers can reach them."""
+    """Rewrite localhost targets so Docker containers can reach the host."""
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
     if host in {"127.0.0.1", "localhost", "::1"}:

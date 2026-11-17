@@ -8,7 +8,7 @@ cd "$ROOT"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Error: Docker no está instalado o no está en PATH." >&2
-  echo "Instala Docker Desktop: https://www.docker.com/products/docker-desktop/" >&2
+  echo "Instala Docker Engine: https://docs.docker.com/engine/install/" >&2
   exit 1
 fi
 

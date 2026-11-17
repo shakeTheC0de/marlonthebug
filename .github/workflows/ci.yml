@@ -23,9 +23,6 @@ jobs:
             python: "3.12"
           - os: ubuntu-latest
             python: "3.13"
-          # macOS runners are heavily capacity-constrained on GitHub-hosted
-          # infrastructure. macOS is covered by the release binary matrix and
-          # by local smoke tests; keep per-push CI fast and deterministic.
           - os: windows-latest
             python: "3.12"
           - os: windows-latest

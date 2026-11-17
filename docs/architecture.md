@@ -160,7 +160,7 @@ Herramientas: sqlmap, nuclei, commix, whatweb, nikto, nmap, ffuf, gobuster y hyd
   requiere Python/uv en el host.
 - SQLite usa journal `DELETE` en modo portable para evitar problemas en USB/red.
 - El cliente HTTP, los feeds y el panel no dependen de servicios externos.
-- Los binarios se generan con PyInstaller en CI para macOS, Linux y Windows.
+- Los binarios se generan con PyInstaller en CI para las plataformas soportadas.
 - Docker usa WeasyPrint para PDF; el binario local usa Chrome/Edge si está disponible y cae a HTML si no.
 
 ## Seguridad del panel

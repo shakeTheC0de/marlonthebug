@@ -43,11 +43,11 @@ needs to mount `/proc`, `/sys`, `/dev` and use `arch-chroot`.
 Run **Arch Live ISO** manually, or push a `v*` tag. It builds `privacy` and
 `audit` on separate runners and uploads both ISOs as artifacts.
 
-### macOS
+### Otros sistemas
 
-macOS is **not** a reliable host for building a live ISO. Use GitHub Actions,
-a Linux machine or an Arch VM. You can still write the resulting ISO to a USB
-from macOS with Etcher or `dd`.
+El build de la ISO requiere Linux. Si tu equipo no lo es, usa GitHub Actions,
+una máquina Linux o una VM Arch. La ISO resultante se puede grabar desde
+cualquier sistema con Etcher o `dd`.
 
 ## Output
 

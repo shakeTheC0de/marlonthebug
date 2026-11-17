@@ -42,7 +42,7 @@ payloads ni frameworks a producción desde este entorno.
 ## Conectar el panel al laboratorio
 
 El panel corre en otra red. Desde sus contenedores, los puertos publicados del
-laboratorio se alcanzan con `host.docker.internal` (Docker Desktop y el stack
+laboratorio se alcanzan con `host.docker.internal` (el stack
 Compose ya lo configuran con `host-gateway`).
 
 ```bash

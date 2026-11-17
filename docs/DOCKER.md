@@ -21,7 +21,7 @@ explotación: valida la petición y lanza un contenedor hijo de un solo uso.
 
 ## Requisitos
 
-- Docker Engine 24+ o Docker Desktop con Compose v2.
+- Docker Engine 24+ con Compose v2.
 - 4 GB de RAM recomendados (el runner usa 2 GB como máximo).
 - Puertos: solo el 8765 en `127.0.0.1` (configurable con `MTB_PANEL_PORT`).
 
@@ -65,7 +65,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-En Windows usa PowerShell o Git Bash. Docker Desktop debe estar arrancado.
+En Linux, el servicio de Docker debe estar arrancado.
 
 ## Acceso
 
@@ -74,7 +74,7 @@ En Windows usa PowerShell o Git Bash. Docker Desktop debe estar arrancado.
 cat ./mtb-data/panel.token
 
 # URL de acceso
-open "http://127.0.0.1:8765/?token=$(cat ./mtb-data/panel.token)"
+xdg-open "http://127.0.0.1:8765/?token=$(cat ./mtb-data/panel.token)"
 ```
 
 El token se guarda en `panel.token` con permisos restringidos y se conserva en
@@ -132,7 +132,7 @@ host usa `host.docker.internal` como activo (o el nombre/IP de la máquina).
 | Backend | Uso | Requisitos |
 |---|---|---|
 | `remote` | Recomendado con Compose | `tools-runner` levantado y token |
-| `docker` | Panel nativo con Docker Desktop/Engine en el host | Docker CLI e imagen local |
+| `docker` | Panel nativo con Docker Engine en el host | Docker CLI e imagen local |
 | `local` | Desarrollo o laboratorio | Herramientas instaladas en `PATH` |
 
 Se configura en `.env` (`MTB_TOOLS_BACKEND`) o en **Configuración → Herramientas
@@ -196,8 +196,8 @@ marlonthebug restore ~/backups/mtb.tar.gz --data-dir /ruta/mtb-data --force
 ## Migrar datos de una instalación nativa
 
 ```bash
-# Instalación nativa (macOS de ejemplo)
-OLD="$HOME/Library/Application Support/MarlonTheBug"
+# Instalación nativa en Linux
+OLD="$HOME/.local/share/marlonthebug"
 
 # Copia al volumen del stack
 mkdir -p ./mtb-data

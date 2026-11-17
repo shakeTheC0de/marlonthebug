@@ -55,10 +55,7 @@ ensure_docker() {
   if [ -n "$(docker info --format '{{.ServerVersion}}' 2>/dev/null || true)" ]; then
     return 0
   fi
-  yellow "Docker no está listo; intentando arrancar Docker Desktop…"
-  if [ "$(uname -s)" = "Darwin" ] && [ -d "/Applications/Docker.app" ]; then
-    open -a Docker
-  fi
+  yellow "Docker no está listo; esperando al servicio…"
   for _ in $(seq 1 80); do
     if [ -n "$(docker info --format '{{.ServerVersion}}' 2>/dev/null || true)" ]; then
       green "Docker listo."
@@ -66,7 +63,7 @@ ensure_docker() {
     fi
     sleep 3
   done
-  red "Docker no arrancó. Abre Docker Desktop y vuelve a intentarlo."
+  red "Docker no arrancó. Inicia el servicio de Docker y vuelve a intentarlo."
   exit 1
 }
 
@@ -84,12 +81,11 @@ panel_url() {
 open_browser() {
   local url
   url="$(panel_url)"
-  case "$(uname -s)" in
-    Darwin) open "$url" ;;
-    Linux) xdg-open "$url" >/dev/null 2>&1 || echo "$url" ;;
-    MINGW*|MSYS*|CYGWIN*) cmd.exe /c start "$url" >/dev/null 2>&1 || echo "$url" ;;
-    *) echo "$url" ;;
-  esac
+  if [ "$(uname -s)" = "Linux" ] && command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url" >/dev/null 2>&1 || echo "$url"
+  else
+    echo "$url"
+  fi
 }
 
 wait_panel() {

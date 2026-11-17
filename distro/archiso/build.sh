@@ -10,7 +10,8 @@
 #   - Any Linux with Docker/podman (the script runs an Arch container).
 #   - GitHub Actions (.github/workflows/arch-iso.yml).
 #
-# macOS cannot build a reliable live ISO. Use the container engine or CI.
+# Un host que no sea Linux no puede construir una ISO live de forma fiable.
+# Usa el motor de contenedores o CI.
 set -euo pipefail
 
 ARCHISO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

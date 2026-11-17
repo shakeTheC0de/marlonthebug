@@ -23,6 +23,8 @@ distro/output/
 distro/archiso/.build/
 distro/archiso/out/
 distro/archiso/cache/
+/isos/
+*.iso
 backups/
 workspaces/
 reports/

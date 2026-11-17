@@ -4,7 +4,7 @@
 
 | Fase | Estado | Entregado |
 |---|---|---|
-| 0. Saneamiento | ✅ | Repo privado, `.gitignore`, datos sensibles fuera de Git, CI, ruff limpio |
+| 0. Saneamiento | ✅ | `.gitignore`, datos sensibles fuera de Git, CI, ruff limpio |
 | 1. Persistencia | ✅ | SQLite, SQLAlchemy async, Alembic, repositorio, deduplicación, audit log |
 | 2. Panel web | ✅ | FastAPI + Jinja, dashboard, proyectos, activos, scans, hallazgos, triaje |
 | 3. Informes | ✅ | PDF/HTML/Markdown/JSON, plantillas ES/EN, evidencia, CVSS, CWE, OWASP |
@@ -40,7 +40,7 @@
 ## Criterios de calidad
 
 - `ruff check` y `ruff format --check` en verde.
-- Tests en macOS, Linux y Windows con Python 3.12 y 3.13.
+- Tests en CI multiplataforma con Python 3.12 y 3.13.
 - Cobertura de persistencia, panel, informes, scope, baseline y detectores clave.
 - Migraciones Alembic reproducibles.
 - Binarios y wheel generados en cada release.

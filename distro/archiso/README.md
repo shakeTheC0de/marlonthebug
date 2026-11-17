@@ -59,8 +59,8 @@ partition and no write-back to the USB.
   with `--privileged` because archiso mounts `/proc`, `/sys`, `/dev` and uses
   `arch-chroot`.
 - About 15-25 GB free disk for a full build, plus network access.
-- **macOS is not a supported build host.** Use Docker on a Linux machine, an
-  Arch VM or GitHub Actions.
+- **Un host que no sea Linux no es compatible para construir la ISO.** Usa
+  Docker en una máquina Linux, una VM Arch o GitHub Actions.
 
 ### Arch host
 
@@ -126,8 +126,7 @@ qemu-system-x86_64 -m 4096 -enable-kvm \
   -cdrom distro/archiso/out/mtb-privacy-*.iso
 ```
 
-On macOS, QEMU with HVF and an ARM ISO does not work for these x86_64 images;
-use an x86_64 Linux host or a real USB.
+Para probar estas imágenes x86_64 usa un host Linux x86_64 o un USB real.
 
 ## Privacy profile
 

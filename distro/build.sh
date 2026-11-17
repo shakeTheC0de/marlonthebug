@@ -4,8 +4,8 @@
 # It remasters the official Kali Live build (live-build) with a custom
 # variant: Kali Xfce + MarlonTheBug panel + tools + browser autostart.
 #
-# Recommended: run on a Linux host or in CI. macOS cannot reliably build a
-# live ISO; use the GitHub Actions workflow instead.
+# Recommended: run on a Linux host or in CI. Other systems cannot reliably
+# build a live ISO; use the GitHub Actions workflow instead.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
