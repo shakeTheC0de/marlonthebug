@@ -115,6 +115,10 @@ if [[ "$VARIANT" == "privacy" ]]; then
         chown -R root:root /opt/tor-browser
         chmod -R go-w /opt/tor-browser
         chmod -R a+rX /opt/tor-browser
+        # Mark it as a system install: start-tor-browser then keeps the
+        # writable profile in ~/.tor-browser instead of the read-only ISO.
+        touch /opt/tor-browser/Browser/is-packaged-app
+        chmod 0644 /opt/tor-browser/Browser/is-packaged-app
         chmod +x /opt/tor-browser/Browser/start-tor-browser 2>/dev/null || true
         chmod +x /opt/tor-browser/start-tor-browser.desktop 2>/dev/null || true
     fi
@@ -185,7 +189,11 @@ EOF
         if [[ ! -x /usr/local/bin/whatweb ]]; then
             if git clone --depth 1 https://github.com/urbanadventurer/WhatWeb /opt/whatweb >/dev/null 2>&1; then
                 chmod +x /opt/whatweb/whatweb
-                ln -sf /opt/whatweb/whatweb /usr/local/bin/whatweb
+                cat >/usr/local/bin/whatweb <<'EOF'
+#!/bin/sh
+exec ruby /opt/whatweb/whatweb "$@"
+EOF
+                chmod 0755 /usr/local/bin/whatweb
             else
                 echo "[mtb] AVISO: no se pudo instalar whatweb." >&2
             fi
@@ -197,7 +205,11 @@ EOF
     if [[ ! -x /usr/local/bin/commix ]]; then
         if git clone --depth 1 https://github.com/commixproject/commix /opt/commix >/dev/null 2>&1; then
             chmod +x /opt/commix/commix.py
-            ln -sf /opt/commix/commix.py /usr/local/bin/commix
+            cat >/usr/local/bin/commix <<'EOF'
+#!/bin/sh
+exec python /opt/commix/commix.py "$@"
+EOF
+            chmod 0755 /usr/local/bin/commix
         else
             echo "[mtb] AVISO: no se pudo instalar commix." >&2
         fi

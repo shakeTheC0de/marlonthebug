@@ -2,6 +2,13 @@ name: Arch Live ISO
 
 on:
   workflow_dispatch:
+    inputs:
+      profiles:
+        description: "Perfiles a construir"
+        required: true
+        default: all
+        type: choice
+        options: [all, privacy, audit]
   push:
     tags: ["v*"]
 
@@ -20,9 +27,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Build the two profiles on separate runners. Each runner starts with
-        # a clean disk, which matters for the KDE/Metasploit audit image.
-        profile: [privacy, audit]
+        # Build the selected profile(s) on separate runners. Each runner starts
+        # with a clean disk, which matters for the KDE/Metasploit audit image.
+        profile: ${{ fromJSON(github.event.inputs.profiles == 'privacy' && '["privacy"]' || github.event.inputs.profiles == 'audit' && '["audit"]' || '["privacy","audit"]') }}
     steps:
       - uses: actions/checkout@v4
 
